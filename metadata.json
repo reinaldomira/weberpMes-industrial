@@ -1,0 +1,6 @@
+{
+  "name": "WebErpMes Industrial - ERP & MES Especializado",
+  "description": "Sistema integrado de Gestão de Recursos (ERP) e Execução de Manufatura (MES) para usinagem, caldeiraria, corte e conformação industrial personalizável.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

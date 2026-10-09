@@ -1,0 +1,100 @@
+import React from 'react';
+import { Settings, ShieldCheck, Factory, HardHat } from 'lucide-react';
+
+interface NavbarProps {
+  currentTab: string;
+  onNavigate: (tab: string) => void;
+  kioskMode: boolean;
+  onToggleKiosk: () => void;
+  companyName: string;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({
+  currentTab,
+  onNavigate,
+  kioskMode,
+  onToggleKiosk,
+  companyName,
+}) => {
+  return (
+    <header className="flex items-center justify-between gap-8 px-6 py-3.5 bg-slate-900 border-b border-slate-800 shrink-0 z-30">
+      {/* Zone 1: Single text element wordmark */}
+      <div 
+        onClick={() => onNavigate('dashboard')}
+        className="flex items-center gap-2.5 cursor-pointer whitespace-nowrap shrink-0 group"
+      >
+        <div className="w-8 h-8 rounded bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-md shadow-cyan-950/40">
+          <Factory className="w-5 h-5 text-white" />
+        </div>
+        <div>
+          <span className="text-base font-bold tracking-tight text-white group-hover:text-cyan-400 transition-colors">
+            WebErpMes
+          </span>
+          <span className="text-xs text-cyan-400 font-mono ml-2 font-normal">
+            v2.4 Industrial
+          </span>
+        </div>
+      </div>
+
+      {/* Zone 2: 4-5 concise single-line text navigation links */}
+      <nav className="hidden md:flex items-center gap-6 text-xs uppercase tracking-wider font-semibold text-slate-300">
+        <button
+          onClick={() => onNavigate('dashboard')}
+          className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 ${
+            currentTab === 'dashboard' ? 'text-cyan-400 border-b-2 border-cyan-400 pb-0.5' : ''
+          }`}
+        >
+          Visão Geral
+        </button>
+        <button
+          onClick={() => onNavigate('quotes')}
+          className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 ${
+            currentTab === 'quotes' ? 'text-cyan-400 border-b-2 border-cyan-400 pb-0.5' : ''
+          }`}
+        >
+          Cotações & Custos
+        </button>
+        <button
+          onClick={() => onNavigate('production')}
+          className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 ${
+            currentTab === 'production' ? 'text-cyan-400 border-b-2 border-cyan-400 pb-0.5' : ''
+          }`}
+        >
+          PCP & Ordens
+        </button>
+        <button
+          onClick={() => onNavigate('engineering')}
+          className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 ${
+            currentTab === 'engineering' ? 'text-cyan-400 border-b-2 border-cyan-400 pb-0.5' : ''
+          }`}
+        >
+          Engenharia & BOM
+        </button>
+        <button
+          onClick={() => onNavigate('customizer')}
+          className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+            currentTab === 'customizer' ? 'text-cyan-400 border-b-2 border-cyan-400 pb-0.5' : ''
+          }`}
+        >
+          <Settings className="w-3.5 h-3.5" />
+          Personalizar Fábrica
+        </button>
+      </nav>
+
+      {/* Zone 3: 1 primary action */}
+      <div className="flex items-center gap-3 shrink-0">
+        <button
+          onClick={onToggleKiosk}
+          className={`px-3.5 py-1.5 text-xs font-semibold rounded transition-colors whitespace-nowrap shrink-0 flex items-center gap-2 ${
+            kioskMode
+              ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold'
+              : 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-sm'
+          }`}
+        >
+          <HardHat className="w-4 h-4" />
+          <span>{kioskMode ? 'Sair do Modo Kiosk' : 'Terminal Chão de Fábrica'}</span>
+        </button>
+      </div>
+    </header>
+  );
+};
