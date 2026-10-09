@@ -120,6 +120,31 @@ export const EngineeringBOM: React.FC<EngineeringBOMProps> = ({
     onUpdateProduct(updated);
   };
 
+  if (!selectedProduct || products.length === 0) {
+    return (
+      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-white tracking-tight">
+                Engenharia de Produto, BOM e Roteiros
+              </h1>
+              <span className="text-xs font-mono px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">
+                WebErpMes Methods & Routing
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-1">
+              Gestão da estrutura de materiais (BOM), sequência operacional fabril e visualizador de desenhos técnicos CAD.
+            </p>
+          </div>
+        </div>
+        <div className="py-20 text-center text-slate-500 text-xs bg-slate-900 border border-slate-800 rounded-lg">
+          Nenhum produto cadastrado na Engenharia de Produto.
+        </div>
+      </div>
+    );
+  }
+
   // Cost rollups
   const totalMaterialCost = selectedProduct.bom.reduce(
     (acc, item) => acc + (item.quantityPerProduct * (1 + item.scrapAllowancePercent / 100)) * item.unitCost,

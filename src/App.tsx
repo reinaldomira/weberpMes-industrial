@@ -10,6 +10,7 @@ import { StockTraceability } from './components/inventory/StockTraceability';
 import { QualityControlView } from './components/quality/QualityControlView';
 import { MaintenanceOEE } from './components/maintenance/MaintenanceOEE';
 import { IndustryCustomizer } from './components/customizer/IndustryCustomizer';
+import { ManualModal } from './components/layout/ManualModal';
 
 import { 
   INITIAL_WORK_CENTERS, 
@@ -49,6 +50,7 @@ import { validateToolingTimeEntry, recalculateAllToolingHours } from './utils/to
 export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [kioskMode, setKioskMode] = useState<boolean>(false);
+  const [isManualOpen, setIsManualOpen] = useState<boolean>(false);
 
   // Core Industrial State
   const [config, setConfig] = useState<IndustryProfileConfig>(DEFAULT_INDUSTRY_PROFILE);
@@ -423,6 +425,7 @@ export default function App() {
           setCurrentTab(next ? 'mes_kiosk' : 'dashboard');
         }}
         companyName={config.companyName}
+        onOpenManual={() => setIsManualOpen(true)}
       />
 
       {/* Main Workspace: Sidebar + Content */}
@@ -435,6 +438,7 @@ export default function App() {
             config={config}
             activeOrdersCount={activeOrdersCount}
             urgentOrdersCount={urgentOrdersCount}
+            onOpenManual={() => setIsManualOpen(true)}
           />
         )}
 
@@ -548,6 +552,16 @@ export default function App() {
           )}
         </main>
       </div>
+
+      {/* Manual Modal Interativo */}
+      <ManualModal
+        isOpen={isManualOpen}
+        onClose={() => setIsManualOpen(false)}
+        onNavigateToTab={(tab) => {
+          setKioskMode(tab === 'mes_kiosk');
+          setCurrentTab(tab);
+        }}
+      />
     </div>
   );
 }

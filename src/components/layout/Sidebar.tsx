@@ -12,7 +12,8 @@ import {
   FileCode,
   Flame,
   CheckCircle2,
-  ChevronRight
+  ChevronRight,
+  BookOpen
 } from 'lucide-react';
 import { IndustryProfileConfig } from '../../types/industrial';
 
@@ -22,6 +23,7 @@ interface SidebarProps {
   config: IndustryProfileConfig;
   activeOrdersCount: number;
   urgentOrdersCount: number;
+  onOpenManual?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -30,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   config,
   activeOrdersCount,
   urgentOrdersCount,
+  onOpenManual,
 }) => {
   const getIndustryBadge = () => {
     switch (config.profileId) {
@@ -181,8 +184,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* System Status Footer */}
-      <div className="p-3.5 border-t border-slate-800 text-[11px] text-slate-300 bg-slate-950/40 space-y-1.5">
-        <div className="flex items-center justify-between">
+      <div className="p-3.5 border-t border-slate-800 text-[11px] text-slate-300 bg-slate-950/40 space-y-2">
+        {onOpenManual && (
+          <button
+            onClick={onOpenManual}
+            className="w-full flex items-center justify-center gap-2 py-2 px-2.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/50 text-cyan-300 border border-cyan-800/60 font-semibold transition-all hover:border-cyan-500 shadow-sm"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Manual do Usuário</span>
+          </button>
+        )}
+        <div className="flex items-center justify-between pt-1">
           <span>Servidor MES:</span>
           <span className="text-emerald-400 font-mono flex items-center gap-1">
             <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Sincronizado

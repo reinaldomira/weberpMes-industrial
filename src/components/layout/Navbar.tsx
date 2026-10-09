@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, ShieldCheck, Factory, HardHat } from 'lucide-react';
+import { Settings, ShieldCheck, Factory, HardHat, BookOpen } from 'lucide-react';
 
 interface NavbarProps {
   currentTab: string;
@@ -7,6 +7,7 @@ interface NavbarProps {
   kioskMode: boolean;
   onToggleKiosk: () => void;
   companyName: string;
+  onOpenManual?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -15,6 +16,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   kioskMode,
   onToggleKiosk,
   companyName,
+  onOpenManual,
 }) => {
   return (
     <header className="flex items-center justify-between gap-8 px-6 py-3.5 bg-slate-900 border-b border-slate-800 shrink-0 z-30">
@@ -81,8 +83,19 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
       </nav>
 
-      {/* Zone 3: 1 primary action */}
-      <div className="flex items-center gap-3 shrink-0">
+      {/* Zone 3: Actions */}
+      <div className="flex items-center gap-2.5 shrink-0">
+        {onOpenManual && (
+          <button
+            onClick={onOpenManual}
+            className="px-3 py-1.5 text-xs font-semibold rounded transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 hover:text-white border border-slate-700 hover:border-cyan-500/50"
+            title="Abrir Manual de Instruções Completo"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Manual do App</span>
+          </button>
+        )}
+
         <button
           onClick={onToggleKiosk}
           className={`px-3.5 py-1.5 text-xs font-semibold rounded transition-colors whitespace-nowrap shrink-0 flex items-center gap-2 ${

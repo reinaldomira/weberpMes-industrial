@@ -51,6 +51,10 @@ export const QualityControlView: React.FC<QualityControlViewProps> = ({
   const handleCreateInspection = (e: React.FormEvent) => {
     e.preventDefault();
     const ord = productionOrders.find(o => o.orderNumber === selectedOrderNum) || productionOrders[0];
+    if (!ord) {
+      alert('Nenhuma Ordem de Produção cadastrada para registrar ensaios de qualidade.');
+      return;
+    }
 
     const newInsp: QualityInspection = {
       id: `qual-${Date.now()}`,
@@ -93,6 +97,10 @@ export const QualityControlView: React.FC<QualityControlViewProps> = ({
   const handleCreateRNC = (e: React.FormEvent) => {
     e.preventDefault();
     const ord = productionOrders.find(o => o.orderNumber === rncOrderNum) || productionOrders[0];
+    if (!ord) {
+      alert('Nenhuma Ordem de Produção cadastrada para registrar RNC.');
+      return;
+    }
 
     const newRnc: NonConformanceReport = {
       id: `rnc-${Date.now()}`,
@@ -193,42 +201,48 @@ export const QualityControlView: React.FC<QualityControlViewProps> = ({
             </div>
 
             <div className="divide-y divide-slate-800">
-              {inspections.map((insp) => {
-                const isSelected = selectedInspection?.id === insp.id;
-                return (
-                  <div
-                    key={insp.id}
-                    onClick={() => setSelectedInspection(insp)}
-                    className={`p-4 cursor-pointer transition-colors ${
-                      isSelected ? 'bg-slate-800/80 border-l-2 border-cyan-500' : 'hover:bg-slate-850/50'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-xs text-cyan-400">
-                            {insp.orderNumber}
-                          </span>
-                          <span className="text-slate-600 text-xs">·</span>
-                          <span className="text-xs font-semibold text-white">
-                            {insp.productCode}
-                          </span>
+              {inspections.length > 0 ? (
+                inspections.map((insp) => {
+                  const isSelected = selectedInspection?.id === insp.id;
+                  return (
+                    <div
+                      key={insp.id}
+                      onClick={() => setSelectedInspection(insp)}
+                      className={`p-4 cursor-pointer transition-colors ${
+                        isSelected ? 'bg-slate-800/80 border-l-2 border-cyan-500' : 'hover:bg-slate-850/50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-xs text-cyan-400">
+                              {insp.orderNumber}
+                            </span>
+                            <span className="text-slate-600 text-xs">·</span>
+                            <span className="text-xs font-semibold text-white">
+                              {insp.productCode}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-400 mt-1">
+                            Inspetor: {insp.inspectorName}
+                          </div>
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            Lote: {insp.lotNumber} · Data: {insp.inspectionDate}
+                          </div>
                         </div>
-                        <div className="text-[11px] text-slate-400 mt-1">
-                          Inspetor: {insp.inspectorName}
-                        </div>
-                        <div className="text-[10px] text-slate-500 font-mono mt-0.5">
-                          Lote: {insp.lotNumber} · Data: {insp.inspectionDate}
-                        </div>
-                      </div>
 
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
-                        100% Conforme
-                      </span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800">
+                          100% Conforme
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              ) : (
+                <div className="py-8 text-center text-slate-500 text-xs">
+                  Nenhuma inspeção de qualidade registrada.
+                </div>
+              )}
             </div>
           </div>
 
@@ -334,40 +348,46 @@ export const QualityControlView: React.FC<QualityControlViewProps> = ({
           </div>
 
           <div className="space-y-3">
-            {rncs.map((rnc) => (
-              <div key={rnc.id} className="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-3 text-xs">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-rose-400 px-2 py-0.5 rounded bg-rose-950/80 border border-rose-800">
-                      {rnc.rncNumber}
+            {rncs.length > 0 ? (
+              rncs.map((rnc) => (
+                <div key={rnc.id} className="bg-slate-950 p-4 rounded-lg border border-slate-800 space-y-3 text-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-rose-400 px-2 py-0.5 rounded bg-rose-950/80 border border-rose-800">
+                        {rnc.rncNumber}
+                      </span>
+                      <span className="font-semibold text-white">OP: {rnc.orderNumber}</span>
+                      <span className="text-slate-500">·</span>
+                      <span className="text-slate-300">{rnc.workCenterName}</span>
+                    </div>
+
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 w-fit">
+                      Ação Corretiva Definida
                     </span>
-                    <span className="font-semibold text-white">OP: {rnc.orderNumber}</span>
-                    <span className="text-slate-500">·</span>
-                    <span className="text-slate-300">{rnc.workCenterName}</span>
                   </div>
 
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-800 w-fit">
-                    Ação Corretiva Definida
-                  </span>
-                </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-855">
+                    <div className="bg-slate-900/80 p-2.5 rounded border border-slate-800">
+                      <span className="text-[10px] text-slate-400 font-bold uppercase">Descrição do Desvio / Defeito:</span>
+                      <p className="text-slate-200 mt-1">{rnc.description}</p>
+                      <div className="text-[10px] text-rose-400 font-mono mt-1">
+                        Quantidade Rejeitada: {rnc.quantityRejected} un
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-850">
-                  <div className="bg-slate-900/80 p-2.5 rounded border border-slate-800">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Descrição do Desvio / Defeito:</span>
-                    <p className="text-slate-200 mt-1">{rnc.description}</p>
-                    <div className="text-[10px] text-rose-400 font-mono mt-1">
-                      Quantidade Rejeitada: {rnc.quantityRejected} un
+                    <div className="bg-slate-900/80 p-2.5 rounded border border-slate-800">
+                      <span className="text-[10px] text-cyan-400 font-bold uppercase">Causa Raiz & Ação Corretiva:</span>
+                      <p className="text-slate-300 mt-1"><strong className="text-slate-400">Causa:</strong> {rnc.rootCause}</p>
+                      <p className="text-emerald-400 mt-1"><strong className="text-slate-400">Ação:</strong> {rnc.correctiveAction}</p>
                     </div>
                   </div>
-
-                  <div className="bg-slate-900/80 p-2.5 rounded border border-slate-800">
-                    <span className="text-[10px] text-cyan-400 font-bold uppercase">Causa Raiz & Ação Corretiva:</span>
-                    <p className="text-slate-300 mt-1"><strong className="text-slate-400">Causa:</strong> {rnc.rootCause}</p>
-                    <p className="text-emerald-400 mt-1"><strong className="text-slate-400">Ação:</strong> {rnc.correctiveAction}</p>
-                  </div>
                 </div>
+              ))
+            ) : (
+              <div className="p-8 text-center text-slate-500 text-xs bg-slate-950 border border-slate-800 rounded-lg">
+                Nenhum relatório de não-conformidade (RNC) registrado.
               </div>
-            ))}
+            )}
           </div>
         </div>
       )}

@@ -132,45 +132,51 @@ export const MaintenanceOEE: React.FC<MaintenanceOEEProps> = ({
         </div>
 
         <div className="divide-y divide-slate-800">
-          {maintenanceRecords.map((m) => {
-            const isCompleted = m.status === 'completed';
-            const isPrev = m.type === 'preventive';
-            return (
-              <div key={m.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-white">{m.machineName}</span>
-                    <span className="text-slate-600">·</span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
-                      isPrev ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' : 'bg-rose-950 text-rose-300 border border-rose-800'
-                    }`}>
-                      {isPrev ? 'Preventiva' : 'Corretiva'}
-                    </span>
+          {maintenanceRecords.length > 0 ? (
+            maintenanceRecords.map((m) => {
+              const isCompleted = m.status === 'completed';
+              const isPrev = m.type === 'preventive';
+              return (
+                <div key={m.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-white">{m.machineName}</span>
+                      <span className="text-slate-600">·</span>
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
+                        isPrev ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' : 'bg-rose-950 text-rose-300 border border-rose-800'
+                      }`}>
+                        {isPrev ? 'Preventiva' : 'Corretiva'}
+                      </span>
+                    </div>
+                    <p className="text-slate-300">{m.description}</p>
+                    <div className="text-[11px] text-slate-400 flex items-center gap-3">
+                      <span>Data: <strong className="text-slate-200">{m.scheduledDate}</strong></span>
+                      <span>·</span>
+                      <span>Técnico: {m.technician}</span>
+                      <span>·</span>
+                      <span>Previsto: {m.estimatedHours} horas</span>
+                    </div>
                   </div>
-                  <p className="text-slate-300">{m.description}</p>
-                  <div className="text-[11px] text-slate-400 flex items-center gap-3">
-                    <span>Data: <strong className="text-slate-200">{m.scheduledDate}</strong></span>
-                    <span>·</span>
-                    <span>Técnico: {m.technician}</span>
-                    <span>·</span>
-                    <span>Previsto: {m.estimatedHours} horas</span>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <select
-                    value={m.status}
-                    onChange={(e) => onUpdateMaintenanceStatus(m.id, e.target.value as any)}
-                    className="bg-slate-950 border border-slate-700 text-white rounded px-2.5 py-1 text-xs"
-                  >
-                    <option value="scheduled">Agendada</option>
-                    <option value="in_progress">Em Execução</option>
-                    <option value="completed">Concluída</option>
-                  </select>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <select
+                      value={m.status}
+                      onChange={(e) => onUpdateMaintenanceStatus(m.id, e.target.value as any)}
+                      className="bg-slate-950 border border-slate-700 text-white rounded px-2.5 py-1 text-xs"
+                    >
+                      <option value="scheduled">Agendada</option>
+                      <option value="in_progress">Em Execução</option>
+                      <option value="completed">Concluída</option>
+                    </select>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          ) : (
+            <div className="py-8 text-center text-slate-500 text-xs">
+              Nenhuma ordem de manutenção preventiva ou corretiva agendada.
+            </div>
+          )}
         </div>
       </div>
 

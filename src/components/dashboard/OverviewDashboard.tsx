@@ -43,9 +43,9 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   const delayedToolingOS = toolingOrders.filter(o => o.status !== 'concluida' && o.status !== 'cancelada' && o.dueDate < todayStr);
   const blockedToolingOS = toolingOrders.filter(o => o.posList.some(p => p.routing.some(r => r.status === 'bloqueada')));
   
-  const averageOEE = Math.round(
-    workCenters.reduce((acc, wc) => acc + wc.efficiencyOEE, 0) / workCenters.length
-  );
+  const averageOEE = workCenters.length > 0
+    ? Math.round(workCenters.reduce((acc, wc) => acc + wc.efficiencyOEE, 0) / workCenters.length)
+    : 0;
 
   const totalBacklogValue = quotes
     .filter(q => q.status === 'approved' || q.status === 'converted')
@@ -278,28 +278,28 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       </div>
 
       {/* Tooling Orders (OS & POS) */}
-      {toolingOrders.length > 0 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                <Wrench className="w-4 h-4 text-cyan-400" />
-                <span>Ordens de Serviço de Ferramentaria (OS & POS)</span>
-              </h2>
-              <p className="text-xs text-slate-400">
-                Acompanhamento de fabricação de moldes, matrizes, dispositivos e peças usinadas.
-              </p>
-            </div>
-            <button
-              onClick={() => onNavigate('production')}
-              className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold"
-            >
-              Abrir Central de OS
-            </button>
+      <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Wrench className="w-4 h-4 text-cyan-400" />
+              <span>Ordens de Serviço de Ferramentaria (OS & POS)</span>
+            </h2>
+            <p className="text-xs text-slate-400">
+              Acompanhamento de fabricação de moldes, matrizes, dispositivos e peças usinadas.
+            </p>
           </div>
+          <button
+            onClick={() => onNavigate('production')}
+            className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold"
+          >
+            Abrir Central de OS
+          </button>
+        </div>
 
-          <div className="divide-y divide-slate-800">
-            {toolingOrders.map((os) => {
+        <div className="divide-y divide-slate-800">
+          {toolingOrders.length > 0 ? (
+            toolingOrders.map((os) => {
               const plannedH = os.posList.reduce((acc, p) => acc + p.plannedHours, 0);
               const actualH = os.posList.reduce((acc, p) => acc + p.actualHours, 0);
               const progress = plannedH > 0 ? Math.min(100, Math.round((actualH / plannedH) * 100)) : 0;
@@ -365,10 +365,14 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                   </div>
                 </div>
               );
-            })}
-          </div>
+            })
+          ) : (
+            <div className="py-8 text-center text-slate-500 text-xs">
+              Nenhuma Ordem de Serviço cadastrada. Clique em "Abrir Central de OS" para cadastrar a primeira OS da ferramentaria.
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Production Orders In Progress */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
@@ -390,7 +394,8 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
         </div>
 
         <div className="divide-y divide-slate-800">
-          {productionOrders.map((order) => {
+          {productionOrders.length > 0 ? (
+            productionOrders.map((order) => {
             const progress = Math.round((order.producedQuantity / order.targetQuantity) * 100);
             return (
               <div
@@ -471,7 +476,12 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
                 </div>
               </div>
             );
-          })}
+          })
+        ) : (
+          <div className="py-8 text-center text-slate-500 text-xs">
+            Nenhuma Ordem de Produção ativa no fluxo fabril.
+          </div>
+        )}
         </div>
       </div>
     </div>

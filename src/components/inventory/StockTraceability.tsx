@@ -222,6 +222,13 @@ export const StockTraceability: React.FC<StockTraceabilityProps> = ({
                     </tr>
                   );
                 })}
+                {filteredMaterials.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-500 font-sans">
+                      Nenhum material cadastrado no estoque de matéria-prima.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

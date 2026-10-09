@@ -120,11 +120,24 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
   };
 
   const handleStart = () => {
+    if (!selectedWc) {
+      alert('Selecione um posto de trabalho antes de iniciar.');
+      return;
+    }
+    if (kioskType === 'tooling_os' && (!activeToolingOS || !activeToolingPOS)) {
+      alert('Nenhuma Ordem de Serviço ou peça (POS) selecionada para apontamento.');
+      return;
+    }
+    if (kioskType === 'series_op' && !activeOrder) {
+      alert('Nenhuma Ordem de Produção (OP) selecionada para apontamento.');
+      return;
+    }
+
     setIsRunning(true);
     setIsPaused(false);
     const targetCode = kioskType === 'tooling_os' && activeToolingOS 
       ? `${activeToolingOS.osNumber} (${activeToolingPOS?.posNumber || ''})`
-      : activeOrder.orderNumber;
+      : (activeOrder?.orderNumber || '');
     onUpdateWorkCenterStatus(selectedWc.id, 'in_production', targetCode, operatorName);
   };
 
@@ -331,18 +344,24 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
               {/* OS Select */}
               <div>
                 <label className="block text-[10px] text-slate-400 mb-1">Ordem de Serviço (OS):</label>
-                <select
-                  disabled={isRunning}
-                  value={selectedOSId}
-                  onChange={(e) => setSelectedOSId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-750 text-white font-mono text-xs rounded p-2"
-                >
-                  {toolingOrders.map(os => (
-                    <option key={os.id} value={os.id}>
-                      {os.osNumber} - {os.clientName} ({os.toolingProject})
-                    </option>
-                  ))}
-                </select>
+                {toolingOrders.length === 0 ? (
+                  <div className="text-slate-500 italic text-xs p-2 bg-slate-950 border border-slate-750 rounded">
+                    Nenhuma OS cadastrada no sistema
+                  </div>
+                ) : (
+                  <select
+                    disabled={isRunning}
+                    value={selectedOSId}
+                    onChange={(e) => setSelectedOSId(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-750 text-white font-mono text-xs rounded p-2"
+                  >
+                    {toolingOrders.map(os => (
+                      <option key={os.id} value={os.id}>
+                        {os.osNumber} - {os.clientName} ({os.toolingProject})
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               {/* POS Select */}
@@ -407,7 +426,7 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
                   Horas: <strong className="text-emerald-400 font-mono">{activeToolingPOS.actualHours}h</strong> / {activeToolingPOS.plannedHours}h
                 </div>
               </div>
-            ) : (
+            ) : kioskType === 'series_op' && activeOrder ? (
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-sm font-bold text-cyan-400">{activeOrder.orderNumber}</span>
@@ -417,6 +436,11 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
                 <h2 className="text-base font-bold text-white mt-1">
                   {activeOrder.productName}
                 </h2>
+              </div>
+            ) : (
+              <div>
+                <div className="text-slate-400 font-medium">Nenhuma ordem selecionada</div>
+                <div className="text-xs text-slate-500 mt-0.5">Cadastre ou selecione uma Ordem de Serviço ou Ordem de Produção.</div>
               </div>
             )}
 
@@ -436,7 +460,7 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
                     </option>
                   ))}
                 </select>
-              ) : (
+              ) : kioskType === 'series_op' && activeOrder ? (
                 <select
                   disabled={isRunning}
                   value={selectedStep}
@@ -449,6 +473,8 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
                     </option>
                   ))}
                 </select>
+              ) : (
+                <div className="text-slate-500 italic text-xs px-2 py-1">Sem etapas disponíveis</div>
               )}
             </div>
           </div>
