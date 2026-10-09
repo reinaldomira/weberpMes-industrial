@@ -12,14 +12,16 @@ import {
   Cpu,
   BarChart3,
   Calendar,
-  Sparkles
+  Sparkles,
+  Wrench
 } from 'lucide-react';
-import { WorkCenter, ProductionOrder, Quote } from '../../types/industrial';
+import { WorkCenter, ProductionOrder, Quote, ToolingOS } from '../../types/industrial';
 
 interface OverviewDashboardProps {
   workCenters: WorkCenter[];
   productionOrders: ProductionOrder[];
   quotes: Quote[];
+  toolingOrders?: ToolingOS[];
   onNavigate: (tab: string) => void;
   onOpenOrder: (order: ProductionOrder) => void;
 }
@@ -28,12 +30,18 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
   workCenters,
   productionOrders,
   quotes,
+  toolingOrders = [],
   onNavigate,
   onOpenOrder,
 }) => {
   // Calculations
   const activeOrders = productionOrders.filter(o => o.status === 'in_progress' || o.status === 'quality_check');
   const urgentOrders = productionOrders.filter(o => o.priority === 'urgent' && o.status !== 'completed');
+  
+  const todayStr = new Date().toISOString().split('T')[0];
+  const activeToolingOS = toolingOrders.filter(o => o.status !== 'concluida' && o.status !== 'cancelada');
+  const delayedToolingOS = toolingOrders.filter(o => o.status !== 'concluida' && o.status !== 'cancelada' && o.dueDate < todayStr);
+  const blockedToolingOS = toolingOrders.filter(o => o.posList.some(p => p.routing.some(r => r.status === 'bloqueada')));
   
   const averageOEE = Math.round(
     workCenters.reduce((acc, wc) => acc + wc.efficiencyOEE, 0) / workCenters.length
@@ -101,23 +109,32 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           </div>
         </div>
 
-        {/* KPI 2: Active Production Orders */}
-        <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+        {/* KPI 2: Tooling OS & Production Orders */}
+        <div 
+          onClick={() => onNavigate('production')}
+          className="bg-slate-900 border border-slate-800 rounded-lg p-4 cursor-pointer hover:border-cyan-700/80 transition-colors"
+        >
           <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>Ordens em Andamento (OP)</span>
-            <Layers className="w-4 h-4 text-blue-400" />
+            <span>Ordens de Serviço (OS)</span>
+            <Layers className="w-4 h-4 text-cyan-400" />
           </div>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-white font-mono tabular-nums">
-              {activeOrders.length}
+              {activeToolingOS.length}
             </span>
             <span className="text-xs text-slate-400">
-              de {productionOrders.length} totais
+              de {toolingOrders.length} OS ativas
             </span>
           </div>
-          <div className="mt-2 text-[11px] text-amber-400 flex items-center gap-1 font-medium">
-            <AlertTriangle className="w-3 h-3 text-amber-400" />
-            <span>{urgentOrders.length} OP com prioridade urgente</span>
+          <div className="mt-2 text-[11px] flex items-center justify-between">
+            <span className={delayedToolingOS.length > 0 ? "text-rose-400 font-semibold" : "text-emerald-400"}>
+              {delayedToolingOS.length > 0 ? `⚠️ ${delayedToolingOS.length} atrasada(s)` : 'Prazos em dia'}
+            </span>
+            {blockedToolingOS.length > 0 && (
+              <span className="text-amber-400 font-semibold text-[10px]">
+                ⛔ {blockedToolingOS.length} c/ bloqueio
+              </span>
+            )}
           </div>
         </div>
 
@@ -259,6 +276,99 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
           })}
         </div>
       </div>
+
+      {/* Tooling Orders (OS & POS) */}
+      {toolingOrders.length > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                <Wrench className="w-4 h-4 text-cyan-400" />
+                <span>Ordens de Serviço de Ferramentaria (OS & POS)</span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                Acompanhamento de fabricação de moldes, matrizes, dispositivos e peças usinadas.
+              </p>
+            </div>
+            <button
+              onClick={() => onNavigate('production')}
+              className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold"
+            >
+              Abrir Central de OS
+            </button>
+          </div>
+
+          <div className="divide-y divide-slate-800">
+            {toolingOrders.map((os) => {
+              const plannedH = os.posList.reduce((acc, p) => acc + p.plannedHours, 0);
+              const actualH = os.posList.reduce((acc, p) => acc + p.actualHours, 0);
+              const progress = plannedH > 0 ? Math.min(100, Math.round((actualH / plannedH) * 100)) : 0;
+              const isDelayed = os.status !== 'concluida' && os.status !== 'cancelada' && os.dueDate < todayStr;
+              const hasBlocked = os.posList.some(p => p.routing.some(r => r.status === 'bloqueada'));
+
+              return (
+                <div
+                  key={os.id}
+                  className="py-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-4 hover:bg-slate-850/40 px-2 rounded transition-colors"
+                >
+                  <div className="space-y-1 min-w-[300px]">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-bold text-xs text-cyan-400">{os.osNumber}</span>
+                      <span className="text-slate-600 text-xs">·</span>
+                      <span className="text-xs font-semibold text-white">{os.clientName}</span>
+                      {isDelayed && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-rose-950 text-rose-300 border border-rose-800 font-bold">
+                          ATRASADA
+                        </span>
+                      )}
+                      {hasBlocked && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800 font-bold">
+                          BLOQUEIO
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-white font-medium">{os.toolingProject}</div>
+                    <div className="text-[11px] text-slate-400">
+                      <span>Prazo: {os.dueDate}</span>
+                      <span className="text-slate-600"> · </span>
+                      <span>Resp: {os.responsible}</span>
+                      <span className="text-slate-600"> · </span>
+                      <span className="text-cyan-300 font-mono">{os.posList.length} POS vinculadas</span>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 max-w-xs">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-400">Horas:</span>
+                      <span className="font-mono text-white font-semibold">
+                        {actualH.toFixed(1)}h / {plannedH.toFixed(1)}h ({progress}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden">
+                      <div className="bg-cyan-500 h-full rounded-full transition-all" style={{ width: `${progress}%` }} />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => onNavigate('production')}
+                      className="px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 transition-colors"
+                    >
+                      Ver POS & Roteiro
+                    </button>
+                    <button
+                      onClick={() => onNavigate('mes_kiosk')}
+                      className="px-3 py-1.5 text-xs bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-700 rounded transition-colors"
+                    >
+                      Apontar
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Production Orders In Progress */}
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">

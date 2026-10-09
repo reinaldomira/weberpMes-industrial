@@ -12,15 +12,26 @@ import {
   Scan, 
   Sparkles,
   ArrowRight,
-  RotateCcw
+  RotateCcw,
+  Wrench,
+  Layers,
+  Building2
 } from 'lucide-react';
-import { ProductionOrder, WorkCenter, ShopFloorTimeEntry } from '../../types/industrial';
+import { 
+  ProductionOrder, 
+  WorkCenter, 
+  ShopFloorTimeEntry,
+  ToolingOS,
+  ToolingTimeEntry 
+} from '../../types/industrial';
 
 interface ShopFloorKioskProps {
   productionOrders: ProductionOrder[];
   workCenters: WorkCenter[];
   activeOrderNumber?: string;
+  toolingOrders?: ToolingOS[];
   onLogProduction: (entry: ShopFloorTimeEntry) => void;
+  onAddToolingTimeEntry?: (entry: ToolingTimeEntry) => boolean | void;
   onUpdateWorkCenterStatus: (wcId: string, status: WorkCenter['status'], orderCode?: string, opName?: string) => void;
 }
 
@@ -28,22 +39,38 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
   productionOrders,
   workCenters,
   activeOrderNumber,
+  toolingOrders = [],
   onLogProduction,
+  onAddToolingTimeEntry,
   onUpdateWorkCenterStatus,
 }) => {
+  // Target type: 'tooling_os' vs 'series_op'
+  const isInitialTooling = activeOrderNumber?.startsWith('OS-') || activeOrderNumber?.startsWith('POS-') || toolingOrders.length > 0;
+  const [kioskType, setKioskType] = useState<'tooling_os' | 'series_op'>(isInitialTooling ? 'tooling_os' : 'series_op');
+
   // Operator state
-  const [operatorName, setOperatorName] = useState('Carlos Eduardo Mendes');
-  const [badgeNumber, setBadgeNumber] = useState('OP-5410');
+  const [operatorName, setOperatorName] = useState('Ricardo Lima (Fresador CNC)');
+  const [badgeNumber, setBadgeNumber] = useState('FERR-302');
 
   // Workcenter selection
   const [selectedWorkCenterId, setSelectedWorkCenterId] = useState(workCenters[0]?.id || '');
   const selectedWc = workCenters.find(w => w.id === selectedWorkCenterId) || workCenters[0];
 
-  // Active Order selection
+  // Tooling selection state
+  const initialToolingOS = toolingOrders.find(o => o.osNumber === activeOrderNumber) || toolingOrders[0];
+  const [selectedOSId, setSelectedOSId] = useState<string>(initialToolingOS?.id || '');
+  const activeToolingOS = toolingOrders.find(o => o.id === selectedOSId) || toolingOrders[0];
+
+  const [selectedPOSId, setSelectedPOSId] = useState<string>(activeToolingOS?.posList[0]?.id || '');
+  const activeToolingPOS = activeToolingOS?.posList.find(p => p.id === selectedPOSId) || activeToolingOS?.posList[0];
+
+  const [selectedToolingStepOrder, setSelectedToolingStepOrder] = useState<number>(
+    activeToolingPOS?.routing[0]?.stepOrder || 1
+  );
+
+  // Series Order selection
   const [searchOpCode, setSearchOpCode] = useState(activeOrderNumber || productionOrders[0]?.orderNumber || '');
   const activeOrder = productionOrders.find(o => o.orderNumber === searchOpCode) || productionOrders[0];
-
-  // Operation step
   const [selectedStep, setSelectedStep] = useState<number>(activeOrder?.currentOperationStep || 10);
 
   // Active Running state
@@ -51,10 +78,13 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
   const [isPaused, setIsPaused] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  // Parts counters
+  // Parts counters (Series mode)
   const [goodParts, setGoodParts] = useState(0);
   const [scrapParts, setScrapParts] = useState(0);
   const [scrapReason, setScrapReason] = useState('Dimensional fora da tolerância');
+
+  // Tooling service note
+  const [serviceDescription, setServiceDescription] = useState('Execução de usinagem e ajuste na máquina.');
 
   // Timer interval
   useEffect(() => {
@@ -67,12 +97,20 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
     return () => clearInterval(interval);
   }, [isRunning, isPaused]);
 
-  // Sync step with order change
+  // Sync POS when OS changes
   useEffect(() => {
-    if (activeOrder) {
-      setSelectedStep(activeOrder.currentOperationStep);
+    if (activeToolingOS && activeToolingOS.posList.length > 0) {
+      setSelectedPOSId(activeToolingOS.posList[0].id);
+      setSelectedToolingStepOrder(activeToolingOS.posList[0].routing[0]?.stepOrder || 1);
     }
-  }, [activeOrder?.orderNumber]);
+  }, [activeToolingOS?.id]);
+
+  // Sync Step when POS changes
+  useEffect(() => {
+    if (activeToolingPOS && activeToolingPOS.routing.length > 0) {
+      setSelectedToolingStepOrder(activeToolingPOS.routing[0].stepOrder);
+    }
+  }, [activeToolingPOS?.id]);
 
   const formatTimer = (totalSecs: number) => {
     const hours = Math.floor(totalSecs / 3600);
@@ -84,7 +122,10 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
   const handleStart = () => {
     setIsRunning(true);
     setIsPaused(false);
-    onUpdateWorkCenterStatus(selectedWc.id, 'in_production', activeOrder.orderNumber, operatorName);
+    const targetCode = kioskType === 'tooling_os' && activeToolingOS 
+      ? `${activeToolingOS.osNumber} (${activeToolingPOS?.posNumber || ''})`
+      : activeOrder.orderNumber;
+    onUpdateWorkCenterStatus(selectedWc.id, 'in_production', targetCode, operatorName);
   };
 
   const handlePause = () => {
@@ -92,6 +133,59 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
   };
 
   const handleFinish = () => {
+    if (kioskType === 'tooling_os' && activeToolingOS && activeToolingPOS) {
+      const activeStep = activeToolingPOS.routing.find(r => r.stepOrder === selectedToolingStepOrder);
+      // Apontamentos com duração de até 60s (finalizados no mesmo minuto) utilizam o intervalo mínimo válido
+      // de 1 minuto no formato HH:mm, correspondendo a aproximadamente 0,0167h (1/60h),
+      // garantindo que não sejam artificialmente inflados para 0,1h (que equivaleria a 6 minutos).
+      const effectiveHours = elapsedSeconds <= 60
+        ? 0.0167
+        : Number((elapsedSeconds / 3600).toFixed(2));
+
+      const now = new Date();
+      let startTime = new Date(now.getTime() - Math.max(60, elapsedSeconds) * 1000);
+      let startStr = startTime.toTimeString().substring(0, 5);
+      let endStr = now.toTimeString().substring(0, 5);
+
+      if (startStr >= endStr) {
+        const adjustedEnd = new Date(now.getTime() + 60000);
+        endStr = adjustedEnd.toTimeString().substring(0, 5);
+      }
+
+      const entry: ToolingTimeEntry = {
+        id: `te-${Date.now()}`,
+        osId: activeToolingOS.id,
+        osNumber: activeToolingOS.osNumber,
+        posId: activeToolingPOS.id,
+        posNumber: activeToolingPOS.posNumber,
+        stepOrder: selectedToolingStepOrder,
+        processName: activeStep?.processName || 'Usinagem / Ajuste',
+        employeeName: operatorName,
+        workCenterName: selectedWc.name,
+        date: now.toISOString().split('T')[0],
+        startTime: startStr,
+        endTime: endStr,
+        effectiveHours,
+        description: serviceDescription || `Operação executada no posto ${selectedWc.code}.`
+      };
+
+      if (onAddToolingTimeEntry) {
+        const result = (onAddToolingTimeEntry as any)(entry);
+        if (result === false) {
+          return;
+        }
+      }
+      onUpdateWorkCenterStatus(selectedWc.id, 'operational');
+
+      alert(`Apontamento da OS ${activeToolingOS.osNumber} / ${activeToolingPOS.posNumber} registrado com sucesso!\nTempo efetivo: ${effectiveHours}h.`);
+
+      setIsRunning(false);
+      setIsPaused(false);
+      setElapsedSeconds(0);
+      return;
+    }
+
+    // Series OP mode finish
     if (goodParts === 0 && scrapParts === 0) {
       alert('Informe ao menos 1 peça produzida ou refugada antes de finalizar o apontamento.');
       return;
@@ -119,9 +213,8 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
     onLogProduction(entry);
     onUpdateWorkCenterStatus(selectedWc.id, 'operational');
 
-    alert(`Apontamento da OP ${activeOrder.orderNumber} registrado com sucesso!\n${goodParts} peças boas gravadas e sincronizadas.`);
+    alert(`Apontamento da OP ${activeOrder.orderNumber} registrado com sucesso!\n${goodParts} peças boas gravadas.`);
 
-    // Reset state
     setIsRunning(false);
     setIsPaused(false);
     setElapsedSeconds(0);
@@ -130,6 +223,7 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
   };
 
   const currentOpDetail = activeOrder?.routing.find(r => r.step === selectedStep);
+  const currentToolingStep = activeToolingPOS?.routing.find(r => r.stepOrder === selectedToolingStepOrder);
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
@@ -149,24 +243,47 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
           </div>
         </div>
 
-        {/* Operator Badge Selector */}
-        <div className="flex items-center gap-3 bg-slate-950 px-4 py-2 rounded-lg border border-slate-800 text-xs">
-          <div>
-            <div className="text-[10px] text-slate-400">Operador Ativo (Crachá):</div>
-            <div className="font-bold text-white flex items-center gap-2">
-              <span>{operatorName}</span>
-              <span className="font-mono text-cyan-400 text-[11px]">({badgeNumber})</span>
-            </div>
+        {/* Mode switcher & Operator Badge */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+            <button
+              onClick={() => setKioskType('tooling_os')}
+              className={`px-3 py-1 rounded font-semibold transition-colors flex items-center gap-1.5 ${
+                kioskType === 'tooling_os' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              <span>Ferramentaria (OS/POS)</span>
+            </button>
+            <button
+              onClick={() => setKioskType('series_op')}
+              className={`px-3 py-1 rounded font-semibold transition-colors flex items-center gap-1.5 ${
+                kioskType === 'series_op' ? 'bg-cyan-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>Produção Seriada (OP)</span>
+            </button>
           </div>
-          <button
-            onClick={() => {
-              const name = prompt('Nome do Operador:', operatorName);
-              if (name) setOperatorName(name);
-            }}
-            className="text-[11px] text-cyan-400 hover:underline font-semibold"
-          >
-            Trocar
-          </button>
+
+          <div className="flex items-center gap-3 bg-slate-950 px-3.5 py-1.5 rounded-lg border border-slate-800 text-xs">
+            <div>
+              <div className="text-[10px] text-slate-400">Operador:</div>
+              <div className="font-bold text-white flex items-center gap-1.5">
+                <span>{operatorName.split(' ')[0]}</span>
+                <span className="font-mono text-cyan-400 text-[10px]">({badgeNumber})</span>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const name = prompt('Nome do Operador:', operatorName);
+                if (name) setOperatorName(name);
+              }}
+              className="text-[10px] text-cyan-400 hover:underline"
+            >
+              Trocar
+            </button>
+          </div>
         </div>
       </div>
 
@@ -179,7 +296,7 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
             <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
               1. Selecionar Máquina / Posto
             </label>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
               {workCenters.map((wc) => (
                 <button
                   key={wc.id}
@@ -203,83 +320,136 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
             </div>
           </div>
 
-          {/* Barcode / OP Scanner Simulator */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-              <span>2. Código de Barras / OP</span>
-              <Scan className="w-4 h-4 text-cyan-400" />
-            </label>
+          {/* Ferramentaria (OS & POS) Selector */}
+          {kioskType === 'tooling_os' ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                <span>2. Ordem de Serviço (OS) & Peça (POS)</span>
+                <Wrench className="w-4 h-4 text-cyan-400" />
+              </label>
 
-            <div className="flex gap-2">
+              {/* OS Select */}
+              <div>
+                <label className="block text-[10px] text-slate-400 mb-1">Ordem de Serviço (OS):</label>
+                <select
+                  disabled={isRunning}
+                  value={selectedOSId}
+                  onChange={(e) => setSelectedOSId(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-750 text-white font-mono text-xs rounded p-2"
+                >
+                  {toolingOrders.map(os => (
+                    <option key={os.id} value={os.id}>
+                      {os.osNumber} - {os.clientName} ({os.toolingProject})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* POS Select */}
+              {activeToolingOS && activeToolingOS.posList.length > 0 && (
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-1">Peça / Componente (POS):</label>
+                  <select
+                    disabled={isRunning}
+                    value={selectedPOSId}
+                    onChange={(e) => setSelectedPOSId(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-750 text-white font-mono text-xs rounded p-2"
+                  >
+                    {activeToolingOS.posList.map(pos => (
+                      <option key={pos.id} value={pos.id}>
+                        {pos.posNumber} - {pos.partName} ({pos.plannedHours}h prev.)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Series OP Barcode / OP Scanner */
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                <span>2. Código de Barras / OP</span>
+                <Scan className="w-4 h-4 text-cyan-400" />
+              </label>
+
               <input
                 type="text"
                 disabled={isRunning}
                 value={searchOpCode}
                 onChange={(e) => setSearchOpCode(e.target.value.toUpperCase())}
                 placeholder="Ex: OP-2026-0142"
-                className="flex-1 bg-slate-950 border border-slate-750 rounded-lg px-3 py-2 text-white font-mono text-sm tracking-wider focus:border-cyan-500 focus:ring-0"
+                className="w-full bg-slate-950 border border-slate-750 rounded-lg px-3 py-2 text-white font-mono text-sm tracking-wider focus:border-cyan-500 focus:ring-0"
               />
             </div>
-
-            {/* Quick OP Chips */}
-            <div className="pt-1 flex flex-wrap gap-1.5 text-[11px]">
-              <span className="text-slate-500 text-[10px] w-full">OPs Disponíveis:</span>
-              {productionOrders.map(o => (
-                <button
-                  key={o.id}
-                  disabled={isRunning}
-                  onClick={() => setSearchOpCode(o.orderNumber)}
-                  className={`px-2.5 py-1 rounded border font-mono text-[11px] ${
-                    searchOpCode === o.orderNumber
-                      ? 'bg-cyan-950 border-cyan-500 text-cyan-300 font-bold'
-                      : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {o.orderNumber}
-                </button>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
 
-        {/* Right Column: Large Touch Controls & Execution Matrix */}
+        {/* Right Column: Execution Controls & Giant Timer */}
         <div className="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col justify-between space-y-6">
-          {/* Active Order & Operation Banner */}
-          <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-sm font-bold text-cyan-400">
-                  {activeOrder.orderNumber}
-                </span>
-                <span className="text-slate-600 text-xs">·</span>
-                <span className="text-xs text-slate-300 font-semibold">{activeOrder.clientName}</span>
-                <span className="text-slate-600 text-xs">·</span>
-                <span className="text-xs text-slate-400 font-mono">Lote: {activeOrder.lotNumber}</span>
+          {/* Active Workpiece Information Banner */}
+          <div className="bg-slate-950 p-4 rounded-lg border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+            {kioskType === 'tooling_os' && activeToolingOS && activeToolingPOS ? (
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold text-cyan-400">{activeToolingOS.osNumber}</span>
+                  <span className="text-slate-600">·</span>
+                  <span className="text-slate-200 font-semibold">{activeToolingOS.clientName}</span>
+                  <span className="text-slate-600">·</span>
+                  <span className="font-mono text-cyan-300 font-bold px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-800">
+                    {activeToolingPOS.posNumber}
+                  </span>
+                </div>
+                <h2 className="text-base font-bold text-white mt-1">
+                  {activeToolingPOS.partName}
+                </h2>
+                <div className="text-slate-400 mt-0.5">
+                  Projeto: <strong className="text-slate-200">{activeToolingOS.toolingProject}</strong> · 
+                  Horas: <strong className="text-emerald-400 font-mono">{activeToolingPOS.actualHours}h</strong> / {activeToolingPOS.plannedHours}h
+                </div>
               </div>
-              <h2 className="text-base font-bold text-white mt-1">
-                {activeOrder.productName}
-              </h2>
-              <div className="text-xs text-slate-400 mt-1">
-                Meta do Lote: <strong className="text-white font-mono">{activeOrder.targetQuantity} un</strong> · 
-                Já Produzido: <strong className="text-emerald-400 font-mono">{activeOrder.producedQuantity} un</strong>
+            ) : (
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-sm font-bold text-cyan-400">{activeOrder.orderNumber}</span>
+                  <span className="text-slate-600">·</span>
+                  <span className="text-slate-200 font-semibold">{activeOrder.clientName}</span>
+                </div>
+                <h2 className="text-base font-bold text-white mt-1">
+                  {activeOrder.productName}
+                </h2>
               </div>
-            </div>
+            )}
 
-            {/* Step selector */}
-            <div className="bg-slate-900 p-2.5 rounded border border-slate-800 text-xs shrink-0">
-              <label className="block text-[10px] text-slate-400 mb-1">Operação do Roteiro:</label>
-              <select
-                disabled={isRunning}
-                value={selectedStep}
-                onChange={(e) => setSelectedStep(Number(e.target.value))}
-                className="bg-slate-950 border border-slate-700 text-white font-mono text-xs rounded px-2.5 py-1"
-              >
-                {activeOrder.routing.map(r => (
-                  <option key={r.step} value={r.step}>
-                    {r.step} - {r.name}
-                  </option>
-                ))}
-              </select>
+            {/* Step Selection in Kiosk */}
+            <div className="bg-slate-900 p-2.5 rounded border border-slate-800 shrink-0">
+              <label className="block text-[10px] text-slate-400 mb-1">Etapa do Roteiro:</label>
+              {kioskType === 'tooling_os' && activeToolingPOS ? (
+                <select
+                  disabled={isRunning}
+                  value={selectedToolingStepOrder}
+                  onChange={(e) => setSelectedToolingStepOrder(Number(e.target.value))}
+                  className="bg-slate-950 border border-slate-700 text-white font-mono text-xs rounded px-2.5 py-1"
+                >
+                  {activeToolingPOS.routing.map(r => (
+                    <option key={r.id} value={r.stepOrder}>
+                      Etapa {r.stepOrder}: {r.processName}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  disabled={isRunning}
+                  value={selectedStep}
+                  onChange={(e) => setSelectedStep(Number(e.target.value))}
+                  className="bg-slate-950 border border-slate-700 text-white font-mono text-xs rounded px-2.5 py-1"
+                >
+                  {activeOrder.routing.map(r => (
+                    <option key={r.step} value={r.step}>
+                      {r.step} - {r.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 
@@ -288,9 +458,9 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
             <div className="text-xs uppercase font-mono tracking-widest text-slate-400">
               {isRunning
                 ? isPaused
-                  ? 'PAUSA DE CICLO OPERACIONAL (SETUP / AJUSTE)'
-                  : 'TEMPO EM EXECUÇÃO CONTÍNUA (MÁQUINA EM TRABALHO)'
-                : 'MÁQUINA AGUARDANDO INÍCIO DE OPERAÇÃO'}
+                  ? 'PAUSA DE OPERAÇÃO (SETUP / TROCA DE FERRAMENTA)'
+                  : 'MÁQUINA EM OPERAÇÃO CONTÍNUA (CRONÔMETRO ATIVO)'
+                : 'AGUARDANDO INÍCIO DA OPERAÇÃO'}
             </div>
 
             <div className={`font-mono text-5xl sm:text-6xl font-extrabold tracking-wider my-3 ${
@@ -306,87 +476,27 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
             <div className="text-xs text-slate-400 flex items-center justify-center gap-2">
               <span>Posto: <strong className="text-white">{selectedWc.name}</strong></span>
               <span>·</span>
-              <span>Operação: <strong className="text-cyan-400">{currentOpDetail?.name || 'Corte / Usinagem'}</strong></span>
+              <span>Etapa: <strong className="text-cyan-400">
+                {kioskType === 'tooling_os' ? currentToolingStep?.processName : currentOpDetail?.name}
+              </strong></span>
             </div>
           </div>
 
-          {/* Parts Counter Touch Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Good Parts Counter */}
-            <div className="bg-slate-950 p-4 rounded-xl border border-emerald-900/60">
-              <div className="flex items-center justify-between text-xs text-emerald-400 font-bold mb-2">
-                <span>PEÇAS BOAS (CONFORMES)</span>
-                <Check className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <button
-                  onClick={() => setGoodParts(prev => Math.max(0, prev - 1))}
-                  className="w-12 h-12 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-mono text-xl font-bold border border-slate-700"
-                >
-                  -1
-                </button>
-                <span className="font-mono text-4xl font-extrabold text-white">
-                  {goodParts}
-                </span>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => setGoodParts(prev => prev + 1)}
-                    className="w-12 h-12 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-mono text-xl font-bold shadow-md shadow-emerald-950"
-                  >
-                    +1
-                  </button>
-                  <button
-                    onClick={() => setGoodParts(prev => prev + 5)}
-                    className="w-12 h-12 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-mono text-sm font-bold shadow-md"
-                  >
-                    +5
-                  </button>
-                </div>
-              </div>
+          {/* Description input during Tooling Execution */}
+          {kioskType === 'tooling_os' && (
+            <div>
+              <label className="block text-[11px] text-slate-400 mb-1 font-semibold">
+                Descrição do Trabalho Executado no Chão de Fábrica:
+              </label>
+              <input
+                type="text"
+                value={serviceDescription}
+                onChange={(e) => setServiceDescription(e.target.value)}
+                placeholder="Ex: Desbaste de cavidades, retificação de face plana, alinhamento..."
+                className="w-full bg-slate-950 border border-slate-750 text-white text-xs rounded p-2"
+              />
             </div>
-
-            {/* Scrap Parts Counter */}
-            <div className="bg-slate-950 p-4 rounded-xl border border-rose-900/60">
-              <div className="flex items-center justify-between text-xs text-rose-400 font-bold mb-2">
-                <span>REFUGO / SUCATA (SCRAP)</span>
-                <AlertOctagon className="w-4 h-4 text-rose-400" />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <button
-                  onClick={() => setScrapParts(prev => Math.max(0, prev - 1))}
-                  className="w-12 h-12 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-mono text-xl font-bold border border-slate-700"
-                >
-                  -1
-                </button>
-                <span className="font-mono text-4xl font-extrabold text-rose-400">
-                  {scrapParts}
-                </span>
-                <button
-                  onClick={() => setScrapParts(prev => prev + 1)}
-                  className="w-12 h-12 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-mono text-xl font-bold shadow-md shadow-rose-950"
-                >
-                  +1
-                </button>
-              </div>
-
-              {scrapParts > 0 && (
-                <div className="mt-3">
-                  <label className="block text-[10px] text-slate-400 mb-1">Motivo do Refugo:</label>
-                  <select
-                    value={scrapReason}
-                    onChange={(e) => setScrapReason(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded p-1.5"
-                  >
-                    <option value="Dimensional fora da tolerância">Dimensional fora da tolerância</option>
-                    <option value="Trinca no raio de dobra">Trinca no raio de dobra</option>
-                    <option value="Rebarba excessiva / Queima de laser">Rebarba excessiva / Queima de laser</option>
-                    <option value="Defeito na matéria-prima">Defeito na matéria-prima</option>
-                    <option value="Quebra de ferramenta CNC">Quebra de ferramenta CNC</option>
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
+          )}
 
           {/* Primary Action Buttons */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -417,7 +527,7 @@ export const ShopFloorKiosk: React.FC<ShopFloorKioskProps> = ({
                   className="sm:col-span-2 py-3.5 bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-bold rounded-xl transition-all shadow-lg shadow-cyan-950/50 flex items-center justify-center gap-2"
                 >
                   <CheckCircle className="w-5 h-5" />
-                  <span>CONCLUIR APONTAMENTO DE PEÇAS</span>
+                  <span>CONCLUIR APONTAMENTO DE HORAS</span>
                 </button>
               </>
             )}

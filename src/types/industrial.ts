@@ -235,3 +235,127 @@ export interface IndustryProfileConfig {
   defaultProfitMarginPercent: number;
   customFields: CustomFieldDefinition[];
 }
+
+// ==========================================
+// MÓDULO FERRAMENTARIA: OS, POS & APONTAMENTOS
+// ==========================================
+
+export type ToolingServiceType = 
+  | 'fabricacao_nova'
+  | 'manutencao_preventiva'
+  | 'manutencao_corretiva'
+  | 'modificacao_engenharia'
+  | 'dispositivo_controle'
+  | 'nacionalizacao'
+  | 'outros';
+
+export type ToolingOSStatus = 
+  | 'aberta'
+  | 'em_planejamento'
+  | 'liberada'
+  | 'em_execucao'
+  | 'aguardando_terceiros'
+  | 'aguardando_inspecao'
+  | 'concluida'
+  | 'cancelada';
+
+export type ToolingPOSStatus = 
+  | 'planejada'
+  | 'em_andamento'
+  | 'pausada'
+  | 'inspecao'
+  | 'concluida'
+  | 'cancelada';
+
+export type ToolingPriority = 'baixa' | 'normal' | 'alta' | 'urgente';
+
+export type ToolingStepStatus = 'pendente' | 'em_andamento' | 'pausada' | 'concluida' | 'bloqueada';
+
+export const TOOLING_PROCESS_OPTIONS = [
+  'Projeto',
+  'Programação CAM',
+  'Preparação de material',
+  'Desbaste',
+  'Acabamento',
+  'Torneamento',
+  'Fresamento CNC',
+  'Eletroerosão a fio',
+  'Eletroerosão por penetração',
+  'Retífica',
+  'Ajuste e bancada',
+  'Montagem',
+  'Tratamento térmico',
+  'Tratamento superficial',
+  'Inspeção dimensional',
+  'Terceirização',
+  'Outros'
+] as const;
+
+export type ToolingProcessName = typeof TOOLING_PROCESS_OPTIONS[number];
+
+export interface ToolingRoutingStep {
+  id: string;
+  stepOrder: number; // 1, 2, 3...
+  processName: string;
+  responsible: string;
+  workCenterId?: string;
+  workCenterName?: string;
+  plannedHours: number;
+  actualHours: number;
+  plannedStartDate?: string;
+  plannedEndDate?: string;
+  status: ToolingStepStatus;
+  notes?: string;
+}
+
+export interface ToolingPOS {
+  id: string;
+  posNumber: string; // Ex: POS-2026-0001-01
+  osId: string;
+  osNumber: string;
+  partName: string;
+  technicalDescription: string;
+  quantity: number;
+  responsible: string;
+  priority: ToolingPriority;
+  dueDate: string;
+  status: ToolingPOSStatus;
+  routing: ToolingRoutingStep[];
+  plannedHours: number;
+  actualHours: number;
+  notes?: string;
+}
+
+export interface ToolingOS {
+  id: string;
+  osNumber: string; // Ex: OS-2026-0001 (único, sequencial)
+  clientName: string;
+  toolingProject: string; // Projeto, molde, matriz ou ferramenta
+  description: string;
+  serviceType: ToolingServiceType;
+  openDate: string;
+  dueDate: string;
+  responsible: string;
+  priority: ToolingPriority;
+  status: ToolingOSStatus;
+  notes?: string;
+  posList: ToolingPOS[];
+}
+
+export interface ToolingTimeEntry {
+  id: string;
+  osId: string;
+  osNumber: string;
+  posId: string;
+  posNumber: string;
+  stepOrder: number;
+  processName: string;
+  employeeName: string;
+  workCenterName?: string;
+  date: string;
+  startTime: string; // HH:mm
+  endTime: string;   // HH:mm
+  effectiveHours: number;
+  description: string;
+}
+

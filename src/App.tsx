@@ -21,7 +21,9 @@ import {
   INITIAL_QUALITY_INSPECTIONS, 
   INITIAL_RNCS, 
   INITIAL_MAINTENANCE, 
-  DEFAULT_INDUSTRY_PROFILE 
+  DEFAULT_INDUSTRY_PROFILE,
+  INITIAL_TOOLING_ORDERS,
+  INITIAL_TOOLING_TIME_ENTRIES
 } from './data/mockIndustrialData';
 
 import { 
@@ -35,8 +37,14 @@ import {
   NonConformanceReport, 
   MaintenanceRecord, 
   IndustryProfileConfig,
-  ManufacturingType
+  ManufacturingType,
+  ToolingOS,
+  ToolingPOS,
+  ToolingRoutingStep,
+  ToolingTimeEntry,
+  ToolingStepStatus
 } from './types/industrial';
+import { validateToolingTimeEntry, recalculateAllToolingHours } from './utils/toolingValidation';
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
@@ -54,6 +62,10 @@ export default function App() {
   const [rncs, setRncs] = useState<NonConformanceReport[]>(INITIAL_RNCS);
   const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>(INITIAL_MAINTENANCE);
   const [kioskPreloadedOrder, setKioskPreloadedOrder] = useState<string>('');
+
+  // Tooling (Ferramentaria) OS, POS & Time Entries State
+  const [toolingOrders, setToolingOrders] = useState<ToolingOS[]>(INITIAL_TOOLING_ORDERS);
+  const [toolingTimeEntries, setToolingTimeEntries] = useState<ToolingTimeEntry[]>(INITIAL_TOOLING_TIME_ENTRIES);
 
   // 1-Click Quote to Production Order Conversion
   const handleConvertToOrder = (quote: Quote) => {
@@ -182,7 +194,7 @@ export default function App() {
     let companyName = config.companyName;
     if (presetId === 'sheet_metal') companyName = 'Apex Caldeiraria & Corte a Laser';
     if (presetId === 'cnc_machining') companyName = 'Apex Usinagem CNC de Precisão';
-    if (presetId === 'molds_tooling') companyName = 'Apex Ferramentaria & Matrizes';
+    if (presetId === 'molds_tooling') companyName = 'Apex Ferramentaria & Matrizes de Precisão';
     if (presetId === 'plastic_injection') companyName = 'Apex Injeção & Polímeros Industriais';
     if (presetId === 'custom_assembly') companyName = 'Apex Máquinas & Montagens Especiais';
 
@@ -194,13 +206,206 @@ export default function App() {
     alert(`Perfil industrial ajustado para "${companyName}" com sucesso!`);
   };
 
-  const handleOpenKioskWithOrder = (orderNum: string) => {
-    setKioskPreloadedOrder(orderNum);
+  const handleOpenKioskWithOrder = (orderNum: string, posNum?: string) => {
+    setKioskPreloadedOrder(posNum || orderNum);
     setCurrentTab('mes_kiosk');
   };
 
-  const urgentOrdersCount = productionOrders.filter(o => o.priority === 'urgent' && o.status !== 'completed').length;
-  const activeOrdersCount = productionOrders.filter(o => o.status === 'in_progress' || o.status === 'released').length;
+  // Tooling Handlers
+  const handleAddNewToolingOS = (newOS: ToolingOS) => {
+    setToolingOrders([newOS, ...toolingOrders]);
+  };
+
+  const handleUpdateToolingOS = (updatedOS: ToolingOS) => {
+    setToolingOrders(toolingOrders.map(o => o.id === updatedOS.id ? updatedOS : o));
+  };
+
+  const handleDeleteToolingOS = (osId: string) => {
+    const target = toolingOrders.find(o => o.id === osId);
+    if (!target) return;
+    // Remove all associated time entries to maintain relational integrity
+    const remainingEntries = toolingTimeEntries.filter(
+      e => e.osId !== osId && e.osNumber !== target.osNumber
+    );
+    setToolingTimeEntries(remainingEntries);
+    setToolingOrders(toolingOrders.filter(o => o.id !== osId));
+  };
+
+  const handleAddNewPOS = (osId: string, newPOS: ToolingPOS) => {
+    const updated = toolingOrders.map(o => {
+      if (o.id === osId) {
+        return {
+          ...o,
+          posList: [...o.posList, newPOS]
+        };
+      }
+      return o;
+    });
+    setToolingOrders(recalculateAllToolingHours(updated, toolingTimeEntries));
+  };
+
+  const handleUpdatePOS = (osId: string, updatedPOS: ToolingPOS) => {
+    const updated = toolingOrders.map(o => {
+      if (o.id === osId) {
+        return {
+          ...o,
+          posList: o.posList.map(p => p.id === updatedPOS.id ? updatedPOS : p)
+        };
+      }
+      return o;
+    });
+    setToolingOrders(recalculateAllToolingHours(updated, toolingTimeEntries));
+  };
+
+  const handleDeletePOS = (osId: string, posId: string) => {
+    const targetOS = toolingOrders.find(o => o.id === osId);
+    const targetPOS = targetOS?.posList.find(p => p.id === posId);
+    if (!targetPOS) return;
+
+    // Clean up associated time entries
+    const remainingEntries = toolingTimeEntries.filter(
+      e => e.posId !== posId && e.posNumber !== targetPOS.posNumber
+    );
+    setToolingTimeEntries(remainingEntries);
+
+    const updated = toolingOrders.map(o => {
+      if (o.id === osId) {
+        return {
+          ...o,
+          posList: o.posList.filter(p => p.id !== posId)
+        };
+      }
+      return o;
+    });
+    setToolingOrders(recalculateAllToolingHours(updated, remainingEntries));
+  };
+
+  const handleUpdateStepStatus = (osId: string, posId: string, stepId: string, status: ToolingStepStatus) => {
+    setToolingOrders(toolingOrders.map(o => {
+      if (o.id === osId) {
+        return {
+          ...o,
+          posList: o.posList.map(p => {
+            if (p.id === posId) {
+              const updatedRouting = p.routing.map(r => r.id === stepId ? { ...r, status } : r);
+              let nextPosStatus: typeof p.status = p.status;
+              if (p.status !== 'cancelada') {
+                const allDone = updatedRouting.length > 0 && updatedRouting.every(r => r.status === 'concluida');
+                const anyBlocked = updatedRouting.some(r => r.status === 'bloqueada');
+                const allPending = updatedRouting.length > 0 && updatedRouting.every(r => r.status === 'pendente' && r.actualHours === 0);
+
+                if (allDone) {
+                  nextPosStatus = 'concluida';
+                } else if (anyBlocked) {
+                  nextPosStatus = 'pausada';
+                } else if (allPending) {
+                  nextPosStatus = 'planejada';
+                } else {
+                  nextPosStatus = 'em_andamento';
+                }
+              }
+
+              return {
+                ...p,
+                routing: updatedRouting,
+                status: nextPosStatus
+              };
+            }
+            return p;
+          })
+        };
+      }
+      return o;
+    }));
+  };
+
+  const handleAddRoutingStep = (osId: string, posId: string, step: ToolingRoutingStep) => {
+    const updated = toolingOrders.map(o => {
+      if (o.id === osId) {
+        return {
+          ...o,
+          posList: o.posList.map(p => {
+            if (p.id === posId) {
+              const updatedRouting = [...p.routing, step];
+              const totalPlanned = updatedRouting.reduce((acc, r) => acc + r.plannedHours, 0);
+              return {
+                ...p,
+                routing: updatedRouting,
+                plannedHours: Number(totalPlanned.toFixed(2))
+              };
+            }
+            return p;
+          })
+        };
+      }
+      return o;
+    });
+    setToolingOrders(recalculateAllToolingHours(updated, toolingTimeEntries));
+  };
+
+  const handleDeleteRoutingStep = (osId: string, posId: string, stepId: string) => {
+    const targetOS = toolingOrders.find(o => o.id === osId);
+    const targetPOS = targetOS?.posList.find(p => p.id === posId);
+    const targetStep = targetPOS?.routing.find(r => r.id === stepId);
+    if (!targetStep) return;
+
+    // Remove time entries for this step
+    const remainingEntries = toolingTimeEntries.filter(
+      e => !( (e.posId === posId || (targetPOS && e.posNumber === targetPOS.posNumber)) && e.stepOrder === targetStep.stepOrder )
+    );
+    setToolingTimeEntries(remainingEntries);
+
+    const updated = toolingOrders.map(o => {
+      if (o.id === osId) {
+        return {
+          ...o,
+          posList: o.posList.map(p => {
+            if (p.id === posId) {
+              const updatedRouting = p.routing.filter(r => r.id !== stepId);
+              const totalPlanned = updatedRouting.reduce((acc, r) => acc + r.plannedHours, 0);
+              return {
+                ...p,
+                routing: updatedRouting,
+                plannedHours: Number(totalPlanned.toFixed(2))
+              };
+            }
+            return p;
+          })
+        };
+      }
+      return o;
+    });
+    setToolingOrders(recalculateAllToolingHours(updated, remainingEntries));
+  };
+
+  const handleAddToolingTimeEntry = (entry: ToolingTimeEntry): boolean => {
+    // Validate time entry rigorously
+    const validation = validateToolingTimeEntry(entry, toolingTimeEntries);
+    if (!validation.valid) {
+      alert(`Erro no Apontamento:\n${validation.error}`);
+      return false;
+    }
+
+    const updatedEntries = [entry, ...toolingTimeEntries];
+    setToolingTimeEntries(updatedEntries);
+
+    // Recalculate all step and POS actual hours strictly from valid entries
+    setToolingOrders(recalculateAllToolingHours(toolingOrders, updatedEntries));
+    return true;
+  };
+
+  const handleDeleteToolingTimeEntry = (entryId: string) => {
+    const updatedEntries = toolingTimeEntries.filter(e => e.id !== entryId);
+    setToolingTimeEntries(updatedEntries);
+    // Recalculate actual hours for all steps and POS
+    setToolingOrders(recalculateAllToolingHours(toolingOrders, updatedEntries));
+  };
+
+  // Metrics Count: active means not concluded and not canceled
+  const activeToolingCount = toolingOrders.filter(o => o.status !== 'concluida' && o.status !== 'cancelada').length;
+  const urgentToolingCount = toolingOrders.filter(o => o.priority === 'urgente' && o.status !== 'concluida' && o.status !== 'cancelada').length;
+  const urgentOrdersCount = productionOrders.filter(o => o.priority === 'urgent' && o.status !== 'completed').length + urgentToolingCount;
+  const activeOrdersCount = productionOrders.filter(o => o.status === 'in_progress' || o.status === 'released').length + activeToolingCount;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -240,6 +445,7 @@ export default function App() {
               workCenters={workCenters}
               productionOrders={productionOrders}
               quotes={quotes}
+              toolingOrders={toolingOrders}
               onNavigate={(tab) => {
                 if (tab === 'mes_kiosk') setKioskMode(true);
                 setCurrentTab(tab);
@@ -272,9 +478,22 @@ export default function App() {
 
           {currentTab === 'production' && (
             <ProductionScheduler
-              productionOrders={productionOrders}
+              toolingOrders={toolingOrders}
+              toolingTimeEntries={toolingTimeEntries}
               workCenters={workCenters}
+              productionOrders={productionOrders}
               products={products}
+              onAddNewToolingOS={handleAddNewToolingOS}
+              onUpdateToolingOS={handleUpdateToolingOS}
+              onAddNewPOS={handleAddNewPOS}
+              onUpdatePOS={handleUpdatePOS}
+              onDeleteToolingOS={handleDeleteToolingOS}
+              onDeletePOS={handleDeletePOS}
+              onDeleteRoutingStep={handleDeleteRoutingStep}
+              onDeleteToolingTimeEntry={handleDeleteToolingTimeEntry}
+              onUpdateStepStatus={handleUpdateStepStatus}
+              onAddRoutingStep={handleAddRoutingStep}
+              onAddToolingTimeEntry={handleAddToolingTimeEntry}
               onUpdateOrderStatus={handleUpdateOrderStatus}
               onOpenKioskWithOrder={handleOpenKioskWithOrder}
               onAddNewOrder={handleAddNewOrder}
@@ -286,7 +505,9 @@ export default function App() {
               productionOrders={productionOrders}
               workCenters={workCenters}
               activeOrderNumber={kioskPreloadedOrder}
+              toolingOrders={toolingOrders}
               onLogProduction={handleLogProduction}
+              onAddToolingTimeEntry={handleAddToolingTimeEntry}
               onUpdateWorkCenterStatus={handleUpdateWorkCenterStatus}
             />
           )}
