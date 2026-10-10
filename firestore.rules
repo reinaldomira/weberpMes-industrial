@@ -16,14 +16,25 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid != null;
     }
 
-    // Verifica se o usuário autenticado é membro ativo da empresa especificada
-    function isMemberOf(companyId) {
-      return isAuthenticated() && 
+    // Verifica se a empresa existe e está com situação ativa
+    function isCompanyActive(companyId) {
+      return exists(/databases/$(database)/documents/companies/$(companyId)) &&
+        get(/databases/$(database)/documents/companies/$(companyId)).data.status == 'active';
+    }
+
+    // Verifica se o usuário autenticado possui vínculo ativo de membro na empresa
+    function isCompanyMember(companyId) {
+      return isAuthenticated() &&
         exists(/databases/$(database)/documents/companies/$(companyId)/members/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/companies/$(companyId)/members/$(request.auth.uid)).data.status == 'active';
     }
 
-    // Verifica se o usuário autenticado possui papel de administrador ativo na empresa
+    // Verifica se o usuário é membro ativo E se a empresa está ativa (política explícita de suspensão/inatividade)
+    function isMemberOf(companyId) {
+      return isCompanyActive(companyId) && isCompanyMember(companyId);
+    }
+
+    // Verifica se o usuário possui papel de administrador ativo na empresa ativa
     function isAdminOf(companyId) {
       return isMemberOf(companyId) &&
         get(/databases/$(database)/documents/companies/$(companyId)/members/$(request.auth.uid)).data.role == 'admin';
@@ -33,15 +44,17 @@ service cloud.firestore {
     // 1. EMPRESAS (CADASTRO E ISOLAMENTO DE TENANT)
     // -------------------------------------------------------------
     match /companies/{companyId} {
-      // Somente membros ativos da empresa podem ler os dados da sua empresa
-      allow read: if isMemberOf(companyId);
+      // Membros da empresa podem ler os dados cadastrais da sua empresa (inclusive para ver status suspenso/inativo)
+      allow read: if isCompanyMember(companyId);
       
       // Criação de novas empresas pelo frontend é terminantemente bloqueada.
       // O provisionamento de empresas e do primeiro admin deve ocorrer via Console ou backend confiável.
       allow create: if false;
       
-      // Apenas administradores da própria empresa podem atualizar dados cadastrais
-      allow update: if isAdminOf(companyId);
+      // Apenas administradores da empresa ativa podem atualizar dados cadastrais; o ID é imutável
+      allow update: if isCompanyActive(companyId) 
+        && isAdminOf(companyId)
+        && request.resource.data.id == resource.data.id;
       
       // Exclusão de empresas é bloqueada no cliente
       allow delete: if false;
@@ -51,36 +64,88 @@ service cloud.firestore {
       // -----------------------------------------------------------
       match /members/{memberUid} {
         // Leitura: membros da empresa podem ver a equipe, ou o próprio usuário pode ver seu vínculo
-        allow read: if isMemberOf(companyId) || (isAuthenticated() && request.auth.uid == memberUid);
+        allow get: if isCompanyMember(companyId) || (isAuthenticated() && (request.auth.uid == memberUid || resource.data.uid == request.auth.uid));
+        allow list: if isCompanyMember(companyId);
 
-        // Criação de novos membros: exclusivamente pelo administrador da empresa
-        allow create: if isAdminOf(companyId) 
+        // Criação de novos membros: exclusivamente pelo administrador de empresa ativa
+        allow create: if isCompanyActive(companyId)
+          && isAdminOf(companyId) 
           && request.resource.data.companyId == companyId
           && request.resource.data.uid == memberUid;
 
-        // Atualização: exclusivamente pelo administrador da empresa.
+        // Atualização de membros: exclusivamente pelo administrador de empresa ativa.
         // Impede que membros comuns alterem seu próprio papel (role) ou de terceiros.
-        allow update: if isAdminOf(companyId)
-          && request.resource.data.companyId == companyId
-          && request.resource.data.uid == memberUid;
+        // companyId e uid são imutáveis.
+        allow update: if isCompanyActive(companyId)
+          && isAdminOf(companyId)
+          && request.resource.data.companyId == resource.data.companyId
+          && request.resource.data.uid == resource.data.uid;
 
-        // Remoção de membros: exclusivamente pelo administrador da empresa
-        allow delete: if isAdminOf(companyId);
+        // Remoção de membros: exclusivamente pelo administrador da empresa ativa
+        allow delete: if isCompanyActive(companyId) && isAdminOf(companyId);
       }
     }
 
-    // Consulta em grupo de coleções para que o usuário autenticado encontre suas empresas
+    // -------------------------------------------------------------
+    // 3. CONSULTA EM GRUPO DE COLEÇÕES (COLLECTION GROUP: members)
+    // Permite que o usuário consulte exclusivamente os seus próprios vínculos
+    // -------------------------------------------------------------
     match /{path=**}/members/{memberUid} {
-      allow read: if isAuthenticated() && request.auth.uid == memberUid;
+      allow list: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow get: if isAuthenticated() && (request.auth.uid == memberUid || resource.data.uid == request.auth.uid);
+      allow create, update, delete: if false;
     }
 
     // -------------------------------------------------------------
-    // 3. MÓDULO DE FERRAMENTARIA (PREPARAÇÃO COM ISOLAMENTO POR TENANT)
+    // 4. MÓDULO DE FERRAMENTARIA
     // -------------------------------------------------------------
     
     // Ordens de Serviço (OS):
-    // Acesso permitido SOMENTE se o usuário for membro da empresa indicada no documento
     match /tooling_orders/{orderId} {
+      allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow create: if isAuthenticated() 
+        && isMemberOf(request.resource.data.companyId)
+        && (!('ownerUid' in request.resource.data) || request.resource.data.ownerUid == request.auth.uid);
+      allow update: if isAuthenticated() 
+        && isMemberOf(resource.data.companyId)
+        && request.resource.data.companyId == resource.data.companyId
+        && (!('ownerUid' in resource.data) || request.resource.data.ownerUid == resource.data.ownerUid);
+      allow delete: if isAuthenticated() && isAdminOf(resource.data.companyId);
+    }
+
+    // Apontamentos de Horas de Ferramentaria:
+    match /tooling_time_entries/{entryId} {
+      allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow create: if isAuthenticated() 
+        && isMemberOf(request.resource.data.companyId)
+        && (!('ownerUid' in request.resource.data) || request.resource.data.ownerUid == request.auth.uid);
+      allow update: if isAuthenticated() 
+        && isMemberOf(resource.data.companyId)
+        && request.resource.data.companyId == resource.data.companyId
+        && (!('ownerUid' in resource.data) || request.resource.data.ownerUid == resource.data.ownerUid)
+        && (isAdminOf(resource.data.companyId) || (('ownerUid' in resource.data) && resource.data.ownerUid == request.auth.uid));
+      allow delete: if isAuthenticated() && (
+        isAdminOf(resource.data.companyId) || 
+        (isMemberOf(resource.data.companyId) && ('ownerUid' in resource.data) && resource.data.ownerUid == request.auth.uid)
+      );
+    }
+
+    // Centros de Trabalho e Máquinas:
+    match /work_centers/{workCenterId} {
+      allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow create: if isAuthenticated() && isAdminOf(request.resource.data.companyId);
+      allow update: if isAuthenticated() 
+        && isAdminOf(resource.data.companyId)
+        && request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && isAdminOf(resource.data.companyId);
+    }
+
+    // -------------------------------------------------------------
+    // 5. DEMAIS COLEÇÕES INDUSTRIAIS (ISOLAMENTO POR COMPANY_ID)
+    // -------------------------------------------------------------
+    
+    // Ordens de Produção (PCP):
+    match /production_orders/{orderId} {
       allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
       allow create: if isAuthenticated() && isMemberOf(request.resource.data.companyId);
       allow update: if isAuthenticated() 
@@ -89,68 +154,87 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && isAdminOf(resource.data.companyId);
     }
 
-    // Apontamentos de Horas de Ferramentaria:
-    // Vinculados à empresa e ao operador
-    match /tooling_time_entries/{entryId} {
+    // Registros do Chão de Fábrica (MES):
+    match /shop_floor_logs/{logId} {
       allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
       allow create: if isAuthenticated() 
-        && isMemberOf(request.resource.data.companyId);
+        && isMemberOf(request.resource.data.companyId)
+        && (!('operatorUid' in request.resource.data) || request.resource.data.operatorUid == request.auth.uid);
       allow update: if isAuthenticated() 
         && isMemberOf(resource.data.companyId)
         && request.resource.data.companyId == resource.data.companyId;
-      allow delete: if isAuthenticated() && (
-        isAdminOf(resource.data.companyId) || 
-        (resource.data.ownerUid == request.auth.uid && isMemberOf(resource.data.companyId))
-      );
-    }
-
-    // Centros de Trabalho e Recursos:
-    match /work_centers/{workCenterId} {
-      allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
-      allow create, update: if isAuthenticated() 
-        && isMemberOf(request.resource.data.companyId)
-        && isAdminOf(request.resource.data.companyId);
       allow delete: if isAuthenticated() && isAdminOf(resource.data.companyId);
     }
 
-    // -------------------------------------------------------------
-    // 4. DEMAIS COLEÇÕES INDUSTRIAIS (ISOLAMENTO POR COMPANY_ID)
-    // -------------------------------------------------------------
-    match /production_orders/{orderId} {
-      allow read, write: if isAuthenticated() && isMemberOf(resource.data.companyId);
-    }
-
-    match /shop_floor_logs/{logId} {
-      allow read, write: if isAuthenticated() && isMemberOf(resource.data.companyId);
-    }
-
+    // Cotações Comerciais:
     match /quotes/{quoteId} {
-      allow read, write: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow create: if isAuthenticated() && isMemberOf(request.resource.data.companyId);
+      allow update: if isAuthenticated() 
+        && isMemberOf(resource.data.companyId)
+        && request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && isAdminOf(resource.data.companyId);
     }
 
-    match /materials/{materialId} {
-      allow read, write: if isAuthenticated() && isMemberOf(resource.data.companyId);
-    }
-
+    // Catálogo de Produtos e Peças Engenharia:
     match /products/{productId} {
-      allow read, write: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow create: if isAuthenticated() && isMemberOf(request.resource.data.companyId);
+      allow update: if isAuthenticated() 
+        && isMemberOf(resource.data.companyId)
+        && request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && isAdminOf(resource.data.companyId);
     }
 
+    // Estoque de Materiais e Matérias-Primas:
+    match /materials/{materialId} {
+      allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow create: if isAuthenticated() && isMemberOf(request.resource.data.companyId);
+      allow update: if isAuthenticated() 
+        && isMemberOf(resource.data.companyId)
+        && request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && isAdminOf(resource.data.companyId);
+    }
+
+    // Inspeções de Qualidade:
     match /quality_inspections/{inspectionId} {
-      allow read, write: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow create: if isAuthenticated() 
+        && isMemberOf(request.resource.data.companyId)
+        && (!('inspectorUid' in request.resource.data) || request.resource.data.inspectorUid == request.auth.uid);
+      allow update: if isAuthenticated() 
+        && isMemberOf(resource.data.companyId)
+        && request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && isAdminOf(resource.data.companyId);
     }
 
+    // Relatórios de Não Conformidade (RNC):
     match /non_conformance_reports/{rncId} {
-      allow read, write: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow create: if isAuthenticated() && isMemberOf(request.resource.data.companyId);
+      allow update: if isAuthenticated() 
+        && isMemberOf(resource.data.companyId)
+        && request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && isAdminOf(resource.data.companyId);
     }
 
+    // Registros de Manutenção (TPM):
     match /maintenance_records/{recordId} {
-      allow read, write: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow read: if isAuthenticated() && isMemberOf(resource.data.companyId);
+      allow create: if isAuthenticated() && isMemberOf(request.resource.data.companyId);
+      allow update: if isAuthenticated() 
+        && isMemberOf(resource.data.companyId)
+        && request.resource.data.companyId == resource.data.companyId;
+      allow delete: if isAuthenticated() && isAdminOf(resource.data.companyId);
     }
 
+    // Configurações Específicas da Empresa:
     match /company_config/{configId} {
       allow read: if isAuthenticated() && isMemberOf(configId);
-      allow write: if isAuthenticated() && isAdminOf(configId);
+      allow create, update: if isAuthenticated() 
+        && isAdminOf(configId) 
+        && request.resource.data.companyId == configId;
+      allow delete: if false;
     }
   }
 }
