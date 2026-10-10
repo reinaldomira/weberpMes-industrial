@@ -111,6 +111,61 @@ export async function setupEmulatorTests() {
       ownerUid: 'user-operador-alfa',
       client: 'Cliente Teste'
     });
+
+    // Segundo Membro Operador Alfa (para testes de autorização entre operadores)
+    await setDoc(doc(adminDb, 'companies', 'empresa-alfa', 'members', 'user-operador2-alfa'), {
+      uid: 'user-operador2-alfa',
+      companyId: 'empresa-alfa',
+      role: 'member',
+      status: 'active',
+      joinedAt: new Date().toISOString()
+    });
+
+    // Centro de Trabalho / Máquina Inicial em Alfa
+    await setDoc(doc(adminDb, 'work_centers', 'wc-alfa-01'), {
+      id: 'wc-alfa-01',
+      code: 'CNC-01',
+      name: 'Centro de Usinagem CNC 5 Eixos',
+      type: 'machining',
+      hourlyRate: 180,
+      efficiencyRate: 0.88,
+      status: 'active',
+      companyId: 'empresa-alfa'
+    });
+
+    // Apontamentos de Horas Iniciais em Alfa
+    await setDoc(doc(adminDb, 'tooling_time_entries', 'entry-alfa-op1'), {
+      id: 'entry-alfa-op1',
+      companyId: 'empresa-alfa',
+      osId: 'os-alfa-01',
+      ownerUid: 'user-operador-alfa',
+      operatorName: 'Operador Alfa 1',
+      workCenterId: 'wc-alfa-01',
+      hoursSpent: 4.5,
+      date: '2026-10-10'
+    });
+
+    await setDoc(doc(adminDb, 'tooling_time_entries', 'entry-alfa-op2'), {
+      id: 'entry-alfa-op2',
+      companyId: 'empresa-alfa',
+      osId: 'os-alfa-01',
+      ownerUid: 'user-operador2-alfa',
+      operatorName: 'Operador Alfa 2',
+      workCenterId: 'wc-alfa-01',
+      hoursSpent: 2.0,
+      date: '2026-10-10'
+    });
+
+    await setDoc(doc(adminDb, 'tooling_time_entries', 'entry-alfa-del-admin'), {
+      id: 'entry-alfa-del-admin',
+      companyId: 'empresa-alfa',
+      osId: 'os-alfa-01',
+      ownerUid: 'user-operador-alfa',
+      operatorName: 'Operador Alfa 1',
+      workCenterId: 'wc-alfa-01',
+      hoursSpent: 1.5,
+      date: '2026-10-10'
+    });
   });
 }
 
@@ -123,6 +178,7 @@ export async function runSecurityAssertions() {
   const unauthedDb = testEnv.unauthenticatedContext().firestore();
   const unlinkedDb = testEnv.authenticatedContext('user-sem-empresa').firestore();
   const operadorAlfaDb = testEnv.authenticatedContext('user-operador-alfa').firestore();
+  const operador2AlfaDb = testEnv.authenticatedContext('user-operador2-alfa').firestore();
   const adminAlfaDb = testEnv.authenticatedContext('user-admin-alfa').firestore();
   const operadorBetaDb = testEnv.authenticatedContext('user-operador-beta').firestore();
   const operadorSuspensaDb = testEnv.authenticatedContext('user-operador-suspensa').firestore();
@@ -203,7 +259,90 @@ export async function runSecurityAssertions() {
     companyId: 'empresa-suspensa'
   }));
 
-  console.log('--- TODAS AS 12 ASSERÇÕES DO RULES UNIT TESTING CONCLUÍDAS COM SUCESSO! ---');
+  // =========================================================================
+  // FASE 1.2: COMPLEMENTO DOS TESTES DE SEGURANÇA
+  // =========================================================================
+
+  // --- A. CENTROS DE TRABALHO E MÁQUINAS (work_centers) ---
+
+  // A.1 Um administrador ativo pode criar um centro de trabalho na própria empresa
+  await assertSucceeds(setDoc(doc(adminAlfaDb, 'work_centers', 'wc-alfa-02'), {
+    id: 'wc-alfa-02',
+    code: 'TORNO-01',
+    name: 'Torno CNC Universal',
+    type: 'turning',
+    hourlyRate: 140,
+    efficiencyRate: 0.90,
+    status: 'active',
+    companyId: 'empresa-alfa'
+  }));
+
+  // A.2 Um membro comum não pode criar centros de trabalho
+  await assertFails(setDoc(doc(operadorAlfaDb, 'work_centers', 'wc-alfa-fail'), {
+    id: 'wc-alfa-fail',
+    code: 'SERRA-01',
+    name: 'Serra Fita Horizontal',
+    type: 'sawing',
+    hourlyRate: 90,
+    efficiencyRate: 0.95,
+    status: 'active',
+    companyId: 'empresa-alfa'
+  }));
+
+  // A.3 Um membro comum não pode alterar centros de trabalho
+  await assertFails(updateDoc(doc(operadorAlfaDb, 'work_centers', 'wc-alfa-01'), {
+    hourlyRate: 250
+  }));
+
+  // A.4 Um usuário de outra empresa não pode ler, criar, alterar ou excluir esses registros
+  // - Bloqueio de leitura de máquina de outra empresa
+  await assertFails(getDoc(doc(operadorBetaDb, 'work_centers', 'wc-alfa-01')));
+  // - Bloqueio de criação de máquina apontando para outra empresa
+  await assertFails(setDoc(doc(operadorBetaDb, 'work_centers', 'wc-alfa-hacked'), {
+    id: 'wc-alfa-hacked',
+    code: 'HACK-01',
+    name: 'Máquina Invasora',
+    type: 'milling',
+    hourlyRate: 100,
+    companyId: 'empresa-alfa'
+  }));
+  // - Bloqueio de alteração de máquina de outra empresa
+  await assertFails(updateDoc(doc(operadorBetaDb, 'work_centers', 'wc-alfa-01'), {
+    hourlyRate: 300
+  }));
+  // - Bloqueio de exclusão de máquina de outra empresa
+  await assertFails(deleteDoc(doc(operadorBetaDb, 'work_centers', 'wc-alfa-01')));
+
+  // A.5 Nenhuma operação pode transferir um registro para outro companyId
+  await assertFails(updateDoc(doc(adminAlfaDb, 'work_centers', 'wc-alfa-01'), {
+    companyId: 'empresa-beta'
+  }));
+
+  // --- B. EXCLUSÃO E INTEGRIDADE DE APONTAMENTOS DE TEMPO (tooling_time_entries) ---
+
+  // B.1 Autor pode excluir o próprio apontamento quando as regras atuais permitem
+  await assertSucceeds(deleteDoc(doc(operadorAlfaDb, 'tooling_time_entries', 'entry-alfa-op1')));
+
+  // B.2 Membro comum não pode excluir o apontamento de outro operador
+  await assertFails(deleteDoc(doc(operadorAlfaDb, 'tooling_time_entries', 'entry-alfa-op2')));
+
+  // B.3 Administrador tem a permissão prevista pelas regras atuais (excluir apontamento de membros)
+  await assertSucceeds(deleteDoc(doc(adminAlfaDb, 'tooling_time_entries', 'entry-alfa-del-admin')));
+
+  // B.4 Usuários de outras empresas não conseguem excluir apontamentos
+  await assertFails(deleteDoc(doc(operadorBetaDb, 'tooling_time_entries', 'entry-alfa-op2')));
+
+  // B.5 Alteração de companyId ou ownerUid é bloqueada
+  // - Tentativa de transferir companyId em apontamento é negada
+  await assertFails(updateDoc(doc(operador2AlfaDb, 'tooling_time_entries', 'entry-alfa-op2'), {
+    companyId: 'empresa-beta'
+  }));
+  // - Tentativa de alterar ownerUid em apontamento é negada
+  await assertFails(updateDoc(doc(operador2AlfaDb, 'tooling_time_entries', 'entry-alfa-op2'), {
+    ownerUid: 'user-admin-alfa'
+  }));
+
+  console.log('--- TODAS AS ASSERÇÕES DO RULES UNIT TESTING (FASE 1 + FASE 1.2) CONCLUÍDAS COM SUCESSO! ---');
 }
 
 // Auto-execução ao rodar diretamente via tsx/node

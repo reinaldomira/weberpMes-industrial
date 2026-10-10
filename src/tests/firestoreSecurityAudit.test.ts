@@ -206,6 +206,12 @@ class FirestoreRulesEngine {
   }
 
   // --- REGRAS: work_centers/{workCenterId} ---
+  canReadWorkCenter(wcId: string): boolean {
+    const existing = this.db.work_centers[wcId];
+    if (!existing) return false;
+    return this.isAuthenticated() && this.isMemberOf(existing.companyId);
+  }
+
   canCreateWorkCenter(incomingData: any): boolean {
     return this.isAuthenticated() && this.isAdminOf(incomingData.companyId);
   }
@@ -416,8 +422,54 @@ export function runComprehensiveSecurityAudit() {
   const membroInativoAlfa = new FirestoreRulesEngine(testDb, { uid: 'uid-inativo-alfa' });
   expectFail(membroInativoAlfa.canReadToolingOrder('os-alfa-01'), 'Membro com status inativo tem acesso bloqueado');
 
+  // =========================================================================
+  // FASE 1.2: COMPLEMENTO DOS TESTES DE SEGURANÇA
+  // =========================================================================
+  console.log('\n--- FASE 1.2: COMPLEMENTO DOS TESTES DE SEGURANÇA ---');
+
+  // A. Centros de trabalho e máquinas (work_centers)
+  console.log('\nA. Centros de trabalho e máquinas (work_centers)');
+  const operadorBeta = new FirestoreRulesEngine(testDb, { uid: 'uid-operador-beta' });
+
+  // A.1 Administrador ativo pode criar um centro de trabalho na própria empresa
+  expectPass(adminAlfa.canCreateWorkCenter({ companyId: 'empresa-alfa', code: 'TORNO-01' }), 'Administrador ativo PODE criar centro de trabalho em sua empresa');
+
+  // A.2 Membro comum não pode criar centros de trabalho
+  expectFail(operadorAlfa.canCreateWorkCenter({ companyId: 'empresa-alfa', code: 'SERRA-01' }), 'Membro comum NÃO pode criar centros de trabalho');
+
+  // A.3 Membro comum não pode alterar centros de trabalho
+  expectFail(operadorAlfa.canUpdateWorkCenter('wc-alfa-cnc', { companyId: 'empresa-alfa', hourlyRate: 250 }), 'Membro comum NÃO pode alterar centros de trabalho');
+
+  // A.4 Usuário de outra empresa não pode ler, criar, alterar ou excluir esses registros
+  expectFail(operadorBeta.canReadWorkCenter('wc-alfa-cnc'), 'Usuário de outra empresa NÃO pode ler máquina');
+  expectFail(operadorBeta.canCreateWorkCenter({ companyId: 'empresa-alfa', code: 'HACK-01' }), 'Usuário de outra empresa NÃO pode criar máquina em outro tenant');
+  expectFail(operadorBeta.canUpdateWorkCenter('wc-alfa-cnc', { companyId: 'empresa-alfa', hourlyRate: 300 }), 'Usuário de outra empresa NÃO pode alterar máquina de outro tenant');
+  expectFail(operadorBeta.canDeleteWorkCenter('wc-alfa-cnc'), 'Usuário de outra empresa NÃO pode excluir máquina de outro tenant');
+
+  // A.5 Nenhuma operação pode transferir um registro para outro companyId
+  expectFail(adminAlfa.canUpdateWorkCenter('wc-alfa-cnc', { companyId: 'empresa-beta' }), 'Alteração de companyId em máquina é terminantemente NEGADA');
+
+  // B. Exclusão e integridade de apontamentos de tempo (tooling_time_entries)
+  console.log('\nB. Exclusão e integridade de apontamentos de tempo (tooling_time_entries)');
+
+  // B.1 Autor pode excluir o próprio apontamento
+  expectPass(operadorAlfa.canDeleteToolingTimeEntry('entry-alfa-01'), 'Autor PODE excluir o próprio apontamento');
+
+  // B.2 Membro comum não pode excluir o apontamento de outro operador
+  expectFail(operadorAlfa.canDeleteToolingTimeEntry('entry-beta-01'), 'Membro comum NÃO pode excluir apontamento de outro operador');
+
+  // B.3 Administrador tem permissão para excluir apontamentos da sua empresa
+  expectPass(adminAlfa.canDeleteToolingTimeEntry('entry-alfa-01'), 'Administrador PODE excluir apontamento na sua empresa');
+
+  // B.4 Usuários de outras empresas não conseguem excluir apontamentos
+  expectFail(operadorBeta.canDeleteToolingTimeEntry('entry-alfa-01'), 'Usuário de outra empresa NÃO pode excluir apontamento');
+
+  // B.5 Alteração de companyId ou ownerUid é bloqueada
+  expectFail(operadorAlfa.canUpdateToolingTimeEntry('entry-alfa-01', { companyId: 'empresa-beta', ownerUid: 'uid-operador-alfa' }), 'Alteração de companyId em apontamento é NEGADA');
+  expectFail(operadorAlfa.canUpdateToolingTimeEntry('entry-alfa-01', { companyId: 'empresa-alfa', ownerUid: 'outro-operador' }), 'Alteração de ownerUid em apontamento é NEGADA');
+
   console.log('\n======================================================================');
-  console.log('TODOS OS 12 CENÁRIOS DE SEGURANÇA FORAM TESTADOS E APROVADOS COM SUCESSO!');
+  console.log('TODAS AS ASSERÇÕES DE SEGURANÇA (FASE 1 + FASE 1.2) CONCLUÍDAS COM SUCESSO!');
   console.log('======================================================================\n');
 }
 
