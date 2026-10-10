@@ -13,9 +13,12 @@ import {
   Flame,
   CheckCircle2,
   ChevronRight,
-  BookOpen
+  BookOpen,
+  UserCheck,
+  LogIn
 } from 'lucide-react';
 import { IndustryProfileConfig } from '../../types/industrial';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SidebarProps {
   currentTab: string;
@@ -24,6 +27,7 @@ interface SidebarProps {
   activeOrdersCount: number;
   urgentOrdersCount: number;
   onOpenManual?: () => void;
+  onOpenAuth?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -33,7 +37,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeOrdersCount,
   urgentOrdersCount,
   onOpenManual,
+  onOpenAuth,
 }) => {
+  const { currentUser } = useAuth();
   const getIndustryBadge = () => {
     switch (config.profileId) {
       case 'sheet_metal':
@@ -185,6 +191,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* System Status Footer */}
       <div className="p-3.5 border-t border-slate-800 text-[11px] text-slate-300 bg-slate-950/40 space-y-2">
+        {onOpenAuth && (
+          <button
+            onClick={onOpenAuth}
+            className={`w-full flex items-center justify-between py-1.5 px-2.5 rounded-lg border text-xs font-semibold transition-all ${
+              currentUser
+                ? 'bg-emerald-950/50 hover:bg-emerald-900/60 text-emerald-300 border-emerald-800/80'
+                : 'bg-slate-900 hover:bg-slate-850 text-slate-300 border-slate-700'
+            }`}
+          >
+            <div className="flex items-center gap-2 truncate">
+              {currentUser ? (
+                <UserCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              ) : (
+                <LogIn className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              )}
+              <span className="truncate">
+                {currentUser ? currentUser.email?.split('@')[0] : 'Entrar no Sistema'}
+              </span>
+            </div>
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-950/80 text-slate-400 border border-slate-800 shrink-0">
+              {currentUser ? 'Ativo' : 'Offline'}
+            </span>
+          </button>
+        )}
+
         {onOpenManual && (
           <button
             onClick={onOpenManual}

@@ -1,0 +1,244 @@
+{
+  "entities": {
+    "Company": {
+      "title": "Empresa Industrial",
+      "description": "Cadastro e parâmetros operacionais de uma empresa ou unidade fabril no modelo multi-tenant",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador estável da empresa"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Razão Social ou Nome Empresarial da Indústria"
+        },
+        "tradeName": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "Nome Fantasia"
+        },
+        "cnpj": {
+          "type": "string",
+          "maxLength": 30,
+          "description": "Cadastro Nacional da Pessoa Jurídica"
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Código interno identificador (ex: IND-01)"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "suspended", "inactive"],
+          "description": "Situação cadastral da empresa"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Carimbo de data/hora de criação no formato ISO"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Carimbo de data/hora da última alteração"
+        }
+      },
+      "required": ["id", "name", "status", "createdAt"]
+    },
+    "CompanyMember": {
+      "title": "Membro da Empresa",
+      "description": "Associação de um usuário autenticado com uma empresa e seu papel de acesso",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "UID do usuário no Firebase Auth"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "ID da empresa à qual o usuário está vinculado"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "E-mail de autenticação do usuário"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "Nome legível do membro"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "member"],
+          "description": "Papel do membro na empresa: gestor ou operador"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "inactive", "pending"],
+          "description": "Situação do vínculo com a empresa"
+        },
+        "joinedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data de associação"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data da última alteração de cargo"
+        },
+        "assignedByUid": {
+          "type": "string",
+          "description": "UID do administrador que concedeu o acesso"
+        }
+      },
+      "required": ["uid", "companyId", "email", "role", "status", "joinedAt"]
+    },
+    "ToolingOrder": {
+      "title": "Ordem de Serviço de Ferramentaria",
+      "description": "Documento mestre de fabricação, projeto ou reforma de ferramentas, moldes e matrizes",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador do documento da OS"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "Tenant ID da empresa detentora da OS"
+        },
+        "osNumber": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Código legível da OS (ex: OS-2026-0001)"
+        },
+        "toolName": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Nome descritivo da ferramenta ou molde"
+        },
+        "status": {
+          "type": "string",
+          "description": "Situação da OS (orcamento, em_andamento, etc.)"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Data de abertura"
+        }
+      },
+      "required": ["id", "companyId", "osNumber", "toolName", "status", "createdAt"]
+    },
+    "ToolingTimeEntry": {
+      "title": "Apontamento de Horas de Ferramentaria",
+      "description": "Registro de execução de horas apontadas por operador e centro de trabalho",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador único do apontamento"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "ID da empresa detentora"
+        },
+        "osId": {
+          "type": "string",
+          "description": "Chave estrangeira da OS de Ferramentaria"
+        },
+        "posId": {
+          "type": "string",
+          "description": "Chave estrangeira da POS"
+        },
+        "stepOrder": {
+          "type": "integer",
+          "description": "Número de sequência da etapa no roteiro"
+        },
+        "operatorName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Nome do operador"
+        },
+        "hours": {
+          "type": "number",
+          "description": "Quantidade de horas trabalhadas"
+        },
+        "ownerUid": {
+          "type": "string",
+          "description": "UID do operador autor do apontamento"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Carimbo de gravação"
+        }
+      },
+      "required": ["id", "companyId", "osId", "posId", "stepOrder", "hours", "createdAt"]
+    },
+    "WorkCenter": {
+      "title": "Centro de Trabalho Fabril",
+      "description": "Posto operativo, máquina ou bancada de manufatura",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador do posto"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "ID da empresa"
+        },
+        "code": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Código da máquina ou célula"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 150,
+          "description": "Descrição do centro de trabalho"
+        },
+        "type": {
+          "type": "string",
+          "description": "Tipo de operação (fresamento, torneamento, etc.)"
+        }
+      },
+      "required": ["id", "companyId", "code", "name", "type"]
+    }
+  },
+  "firestore": {
+    "/companies/{companyId}": {
+      "schema": {
+        "$ref": "#/entities/Company"
+      },
+      "description": "Cadastro e metadados da empresa industrial (multi-tenant)"
+    },
+    "/companies/{companyId}/members/{memberUid}": {
+      "schema": {
+        "$ref": "#/entities/CompanyMember"
+      },
+      "description": "Vínculo de membresia e papéis (admin/member) da empresa"
+    },
+    "/tooling_orders/{orderId}": {
+      "schema": {
+        "$ref": "#/entities/ToolingOrder"
+      },
+      "description": "Ordens de Serviço e Peças subordinadas de Ferramentaria"
+    },
+    "/tooling_time_entries/{entryId}": {
+      "schema": {
+        "$ref": "#/entities/ToolingTimeEntry"
+      },
+      "description": "Apontamentos de horas de ferramentaria vinculados a operador e OS/POS"
+    },
+    "/work_centers/{workCenterId}": {
+      "schema": {
+        "$ref": "#/entities/WorkCenter"
+      },
+      "description": "Centros de trabalho, máquinas e recursos fabris"
+    }
+  }
+}

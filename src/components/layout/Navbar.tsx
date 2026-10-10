@@ -1,5 +1,6 @@
 import React from 'react';
-import { Settings, ShieldCheck, Factory, HardHat, BookOpen } from 'lucide-react';
+import { Settings, ShieldCheck, Factory, HardHat, BookOpen, UserCheck, LogIn } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface NavbarProps {
   currentTab: string;
@@ -8,6 +9,7 @@ interface NavbarProps {
   onToggleKiosk: () => void;
   companyName: string;
   onOpenManual?: () => void;
+  onOpenAuth?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -17,7 +19,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleKiosk,
   companyName,
   onOpenManual,
+  onOpenAuth,
 }) => {
+  const { currentUser, activeCompany, currentMember } = useAuth();
   return (
     <header className="flex items-center justify-between gap-8 px-6 py-3.5 bg-slate-900 border-b border-slate-800 shrink-0 z-30">
       {/* Zone 1: Single text element wordmark */}
@@ -85,6 +89,34 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Zone 3: Actions */}
       <div className="flex items-center gap-2.5 shrink-0">
+        {onOpenAuth && (
+          <button
+            onClick={onOpenAuth}
+            className={`px-3 py-1.5 text-xs font-semibold rounded transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 border ${
+              currentUser
+                ? 'bg-emerald-950/60 hover:bg-emerald-900/70 text-emerald-300 border-emerald-800'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border-slate-700'
+            }`}
+            title={
+              currentUser 
+                ? `${currentUser.email} • ${activeCompany ? `${activeCompany.name} (${currentMember?.role === 'admin' ? 'Admin' : 'Membro'})` : 'Sem empresa vinculada'}` 
+                : 'Entrar no Sistema'
+            }
+          >
+            {currentUser ? (
+              <>
+                <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="truncate max-w-[110px] font-mono">{currentUser.email?.split('@')[0]}</span>
+              </>
+            ) : (
+              <>
+                <LogIn className="w-3.5 h-3.5 text-slate-400" />
+                <span>Entrar</span>
+              </>
+            )}
+          </button>
+        )}
+
         {onOpenManual && (
           <button
             onClick={onOpenManual}

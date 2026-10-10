@@ -11,6 +11,7 @@ import { QualityControlView } from './components/quality/QualityControlView';
 import { MaintenanceOEE } from './components/maintenance/MaintenanceOEE';
 import { IndustryCustomizer } from './components/customizer/IndustryCustomizer';
 import { ManualModal } from './components/layout/ManualModal';
+import { AuthModal } from './components/auth/AuthModal';
 
 import { 
   INITIAL_WORK_CENTERS, 
@@ -51,6 +52,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<string>('dashboard');
   const [kioskMode, setKioskMode] = useState<boolean>(false);
   const [isManualOpen, setIsManualOpen] = useState<boolean>(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
 
   // Core Industrial State
   const [config, setConfig] = useState<IndustryProfileConfig>(DEFAULT_INDUSTRY_PROFILE);
@@ -426,6 +428,7 @@ export default function App() {
         }}
         companyName={config.companyName}
         onOpenManual={() => setIsManualOpen(true)}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
       />
 
       {/* Main Workspace: Sidebar + Content */}
@@ -439,6 +442,7 @@ export default function App() {
             activeOrdersCount={activeOrdersCount}
             urgentOrdersCount={urgentOrdersCount}
             onOpenManual={() => setIsManualOpen(true)}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
           />
         )}
 
@@ -561,6 +565,12 @@ export default function App() {
           setKioskMode(tab === 'mes_kiosk');
           setCurrentTab(tab);
         }}
+      />
+
+      {/* Modal de Autenticação Industrial */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
       />
     </div>
   );
