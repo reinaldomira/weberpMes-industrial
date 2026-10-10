@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings, ShieldCheck, Factory, HardHat, BookOpen, UserCheck, LogIn } from 'lucide-react';
+import { Settings, ShieldCheck, Factory, HardHat, BookOpen, UserCheck, LogIn, Cpu } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface NavbarProps {
@@ -75,6 +75,15 @@ export const Navbar: React.FC<NavbarProps> = ({
           }`}
         >
           Engenharia & BOM
+        </button>
+        <button
+          onClick={() => onNavigate('machines')}
+          className={`hover:text-cyan-400 transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+            currentTab === 'machines' ? 'text-cyan-400 border-b-2 border-cyan-400 pb-0.5' : ''
+          }`}
+        >
+          <Cpu className="w-3.5 h-3.5" />
+          Máquinas & Custos
         </button>
         <button
           onClick={() => onNavigate('customizer')}

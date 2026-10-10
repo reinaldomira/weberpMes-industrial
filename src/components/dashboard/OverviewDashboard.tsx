@@ -179,20 +179,30 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
       <div className="bg-slate-900 border border-slate-800 rounded-lg p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-sm font-bold text-white">
-              Status das Máquinas e Centros de Trabalho
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-cyan-400" />
+              <span>Status das Máquinas e Centros de Custos</span>
             </h2>
             <p className="text-xs text-slate-400">
-              Monitoramento direto de telemetria dos postos operacionais e taxas horárias de absorção.
+              Monitoramento direto dos postos operacionais, taxas horárias de absorção e centros de custos.
             </p>
           </div>
-          <button
-            onClick={() => onNavigate('production')}
-            className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold"
-          >
-            <span>Ver Gantt de Capacidade</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onNavigate('machines')}
+              className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1 font-semibold"
+            >
+              <span>Gerenciar / Editar Máquinas</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => onNavigate('production')}
+              className="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-semibold"
+            >
+              <span>Gantt</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
@@ -244,8 +254,15 @@ export const OverviewDashboard: React.FC<OverviewDashboardProps> = ({
 
                   <div className="flex justify-between text-slate-400">
                     <span>Taxa Horária:</span>
-                    <span className="font-mono text-slate-300">
+                    <span className="font-mono text-emerald-400 font-semibold">
                       R$ {wc.hourlyRate.toFixed(2)} /h
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between text-slate-400">
+                    <span>Centro de Custos:</span>
+                    <span className="font-mono text-slate-300">
+                      {wc.costCenterCode || `CC-${wc.code}`}
                     </span>
                   </div>
 

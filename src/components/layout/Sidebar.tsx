@@ -15,7 +15,8 @@ import {
   ChevronRight,
   BookOpen,
   UserCheck,
-  LogIn
+  LogIn,
+  Cpu
 } from 'lucide-react';
 import { IndustryProfileConfig } from '../../types/industrial';
 import { useAuth } from '../../contexts/AuthContext';
@@ -107,6 +108,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badge: '1 RNC',
       badgeWarning: true,
       enabled: config.modulesEnabled.qualityControl,
+    },
+    {
+      id: 'machines',
+      label: 'Máquinas & Centros de Custo',
+      icon: Cpu,
+      badge: 'CC',
+      enabled: true,
     },
     {
       id: 'maintenance',

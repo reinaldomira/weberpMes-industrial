@@ -9,6 +9,7 @@ import { ShopFloorKiosk } from './components/mes/ShopFloorKiosk';
 import { StockTraceability } from './components/inventory/StockTraceability';
 import { QualityControlView } from './components/quality/QualityControlView';
 import { MaintenanceOEE } from './components/maintenance/MaintenanceOEE';
+import { WorkCentersManager } from './components/maintenance/WorkCentersManager';
 import { IndustryCustomizer } from './components/customizer/IndustryCustomizer';
 import { ManualModal } from './components/layout/ManualModal';
 import { AuthModal } from './components/auth/AuthModal';
@@ -163,6 +164,18 @@ export default function App() {
       currentOrderCode: orderCode,
       currentOperator: operator
     } : w));
+  };
+
+  const handleAddWorkCenter = (newWc: WorkCenter) => {
+    setWorkCenters([...workCenters, newWc]);
+  };
+
+  const handleUpdateWorkCenter = (updatedWc: WorkCenter) => {
+    setWorkCenters(workCenters.map(w => w.id === updatedWc.id ? updatedWc : w));
+  };
+
+  const handleDeleteWorkCenter = (wcId: string) => {
+    setWorkCenters(workCenters.filter(w => w.id !== wcId));
   };
 
   const handleAddMaterial = (newMat: MaterialItem) => {
@@ -535,6 +548,15 @@ export default function App() {
               productionOrders={productionOrders}
               onAddInspection={handleAddInspection}
               onAddRNC={handleAddRNC}
+            />
+          )}
+
+          {currentTab === 'machines' && (
+            <WorkCentersManager
+              workCenters={workCenters}
+              onAddWorkCenter={handleAddWorkCenter}
+              onUpdateWorkCenter={handleUpdateWorkCenter}
+              onDeleteWorkCenter={handleDeleteWorkCenter}
             />
           )}
 

@@ -10,7 +10,9 @@ export interface WorkCenter {
   code: string;
   name: string;
   category: 'cutting' | 'bending' | 'machining' | 'welding' | 'surface' | 'assembly' | 'quality';
-  hourlyRate: number; // R$/hora
+  hourlyRate: number; // R$/hora (Taxa Horária / Centro de Custo)
+  costCenterCode?: string; // Código Contábil / Centro de Custo (Ex: CC-3010, CC-USIN)
+  costCenterName?: string; // Nome do Centro de Custos (Ex: Usinagem CNC Pesada)
   capacityHoursPerDay: number;
   status: 'operational' | 'in_production' | 'maintenance' | 'idle';
   currentOperator?: string;

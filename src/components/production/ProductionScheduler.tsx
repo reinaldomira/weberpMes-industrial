@@ -121,6 +121,7 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
   const [targetStepForTime, setTargetStepForTime] = useState<ToolingRoutingStep | null>(null);
 
   // Form State: OS
+  const [osNumberInput, setOsNumberInput] = useState('');
   const [osClient, setOsClient] = useState('');
   const [osProject, setOsProject] = useState('');
   const [osDescription, setOsDescription] = useState('');
@@ -133,6 +134,7 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
   const [osNotes, setOsNotes] = useState('');
 
   // Form State: POS
+  const [posNumberInput, setPosNumberInput] = useState('');
   const [posPartName, setPosPartName] = useState('');
   const [posTechDesc, setPosTechDesc] = useState('');
   const [posQuantity, setPosQuantity] = useState(1);
@@ -264,6 +266,7 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
   // Open New OS Modal
   const handleOpenCreateOS = () => {
     setEditingOS(null);
+    setOsNumberInput(getNextOSNumber());
     setOsClient('');
     setOsProject('');
     setOsDescription('');
@@ -280,6 +283,7 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
   // Open Edit OS Modal
   const handleOpenEditOS = (os: ToolingOS) => {
     setEditingOS(os);
+    setOsNumberInput(os.osNumber);
     setOsClient(os.clientName);
     setOsProject(os.toolingProject);
     setOsDescription(os.description);
@@ -296,14 +300,30 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
   // Save OS (Create or Edit)
   const handleSaveOS = (e: React.FormEvent) => {
     e.preventDefault();
+    const finalOSNumber = osNumberInput.trim();
+    if (!finalOSNumber) {
+      alert('Por favor, informe o número da OS.');
+      return;
+    }
+
     if (!osClient.trim() || !osProject.trim()) {
       alert('Por favor, informe o Cliente e o Projeto / Molde / Matriz da OS.');
+      return;
+    }
+
+    // Check duplicate OS number
+    const isDuplicate = toolingOrders.some(
+      o => o.osNumber.trim().toUpperCase() === finalOSNumber.toUpperCase() && o.id !== editingOS?.id
+    );
+    if (isDuplicate) {
+      alert(`Já existe uma Ordem de Serviço com o número "${finalOSNumber}". Por favor, utilize um número diferente.`);
       return;
     }
 
     if (editingOS) {
       const updated: ToolingOS = {
         ...editingOS,
+        osNumber: finalOSNumber,
         clientName: osClient.trim(),
         toolingProject: osProject.trim(),
         description: osDescription.trim(),
@@ -313,15 +333,19 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
         responsible: osResponsible,
         priority: osPriority,
         status: osStatus,
-        notes: osNotes.trim()
+        notes: osNotes.trim(),
+        // Keep posList synchronized with updated osNumber
+        posList: editingOS.posList.map(p => ({
+          ...p,
+          osNumber: finalOSNumber
+        }))
       };
       onUpdateToolingOS(updated);
       setIsNewOSModalOpen(false);
     } else {
-      const newOSNumber = getNextOSNumber();
       const newOS: ToolingOS = {
         id: `os-${Date.now()}`,
-        osNumber: newOSNumber,
+        osNumber: finalOSNumber,
         clientName: osClient.trim(),
         toolingProject: osProject.trim(),
         description: osDescription.trim(),
@@ -343,6 +367,7 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
   // Open New POS Modal
   const handleOpenCreatePOS = (targetOS: ToolingOS) => {
     setEditingPOS(null);
+    setPosNumberInput(generateNextPOSNumber(targetOS));
     setPosPartName('');
     setPosTechDesc('');
     setPosQuantity(1);
@@ -357,6 +382,7 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
   // Open Edit POS Modal
   const handleOpenEditPOS = (pos: ToolingPOS) => {
     setEditingPOS(pos);
+    setPosNumberInput(pos.posNumber);
     setPosPartName(pos.partName);
     setPosTechDesc(pos.technicalDescription);
     setPosQuantity(pos.quantity);
@@ -372,8 +398,24 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
   const handleSavePOS = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOS) return;
+
+    const finalPOSNumber = posNumberInput.trim();
+    if (!finalPOSNumber) {
+      alert('Por favor, informe o número da POS.');
+      return;
+    }
+
     if (!posPartName.trim()) {
       alert('Informe o Nome da Peça ou Operação da POS.');
+      return;
+    }
+
+    // Check duplicate POS number within this OS (or across all OSs)
+    const isDuplicatePOS = selectedOS.posList.some(
+      p => p.posNumber.trim().toUpperCase() === finalPOSNumber.toUpperCase() && p.id !== editingPOS?.id
+    );
+    if (isDuplicatePOS) {
+      alert(`Já existe uma POS com o número "${finalPOSNumber}" cadastrada nesta OS ${selectedOS.osNumber}. Por favor, informe um número diferente.`);
       return;
     }
 
@@ -383,6 +425,7 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
         : posPlannedHours;
       const updated: ToolingPOS = {
         ...editingPOS,
+        posNumber: finalPOSNumber,
         partName: posPartName.trim(),
         technicalDescription: posTechDesc.trim(),
         quantity: posQuantity,
@@ -395,11 +438,9 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
       onUpdatePOS(selectedOS.id, updated);
       setIsNewPOSModalOpen(false);
     } else {
-      const posCode = generateNextPOSNumber(selectedOS);
-
       const newPOS: ToolingPOS = {
         id: `pos-${Date.now()}`,
-        posNumber: posCode,
+        posNumber: finalPOSNumber,
         osId: selectedOS.id,
         osNumber: selectedOS.osNumber,
         partName: posPartName.trim(),
@@ -1492,6 +1533,42 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
             </div>
 
             <form onSubmit={handleSaveOS} className="p-5 space-y-4 overflow-y-auto text-xs">
+              <div className="bg-slate-950 p-3 rounded border border-cyan-900/40 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-cyan-400 font-bold uppercase tracking-wider text-[11px]">
+                    Número da Ordem de Serviço (OS) *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setOsNumberInput(getNextOSNumber())}
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 underline font-mono flex items-center gap-1"
+                    title="Gerar próximo número sequencial sugerido"
+                  >
+                    <span>Sugerir Próximo: {getNextOSNumber()}</span>
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={osNumberInput}
+                    onChange={(e) => setOsNumberInput(e.target.value)}
+                    placeholder="Ex: OS-2026-0004 ou OS-1542"
+                    className="w-full bg-slate-900 border border-cyan-800/60 rounded p-2 text-white font-mono text-sm font-bold focus:border-cyan-400 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setOsNumberInput(getNextOSNumber())}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs shrink-0"
+                  >
+                    Auto
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Você pode digitar livremente o número da OS ou manter a sugestão automática sequencial. O código deve ser único.
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Cliente / Solicitante *</label>
@@ -1657,6 +1734,42 @@ export const ProductionScheduler: React.FC<ProductionSchedulerProps> = ({
             </div>
 
             <form onSubmit={handleSavePOS} className="p-5 space-y-4 overflow-y-auto text-xs">
+              <div className="bg-slate-950 p-3 rounded border border-cyan-900/40 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-cyan-400 font-bold uppercase tracking-wider text-[11px]">
+                    Número da Peça / POS *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setPosNumberInput(generateNextPOSNumber(selectedOS))}
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 underline font-mono flex items-center gap-1"
+                    title="Gerar próximo número sequencial de POS para esta OS"
+                  >
+                    <span>Sugerir: {generateNextPOSNumber(selectedOS)}</span>
+                  </button>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    required
+                    value={posNumberInput}
+                    onChange={(e) => setPosNumberInput(e.target.value)}
+                    placeholder={`Ex: POS-${selectedOS.osNumber.replace(/[^0-9]/g, '').slice(-4) || '0001'}-01 ou POS-A1`}
+                    className="w-full bg-slate-900 border border-cyan-800/60 rounded p-2 text-white font-mono text-sm font-bold focus:border-cyan-400 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPosNumberInput(generateNextPOSNumber(selectedOS))}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded border border-slate-700 text-xs shrink-0"
+                  >
+                    Auto
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400">
+                  Informe o número/código desejado para a POS ou utilize o sequencial gerado automaticamente.
+                </p>
+              </div>
+
               <div>
                 <label className="block text-slate-300 font-medium mb-1">Nome da Peça / Componente / Operação *</label>
                 <input
